@@ -2,6 +2,7 @@ node_modules
 dist
 cdk.out
 .env*
+!.env.example
 *.local.*
 samples/
 coverage

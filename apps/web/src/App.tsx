@@ -1,12 +1,20 @@
-import { scoreLabel } from '@shortlist-ai/shared';
+import { Route, Routes } from 'react-router-dom';
+import { AppShell } from './components/layout/AppShell';
+import { ToastProvider } from './components/ui';
+import { PlaceholderPage } from './pages/PlaceholderPage';
 
 export function App() {
   return (
-    <main className="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100 grid place-items-center">
-      <div className="text-center">
-        <h1 className="text-3xl font-semibold">Shortlist AI</h1>
-        <p className="mt-2 text-slate-500">Scaffold OK. Sample label: {scoreLabel(72)}</p>
-      </div>
-    </main>
+    <ToastProvider>
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route index element={<PlaceholderPage title="New Analysis" description="Paste a job description to get started. Coming in Phase 3." />} />
+          <Route path="applications" element={<PlaceholderPage title="Applications" description="Your analyses will appear here." />} />
+          <Route path="resumes" element={<PlaceholderPage title="My Resumes" description="Upload and manage your resumes. Coming in Phase 2." />} />
+          <Route path="settings" element={<PlaceholderPage title="Settings" description="Anthropic API key and model settings. Coming in Phase 1b." />} />
+          <Route path="*" element={<PlaceholderPage title="Not found" description="That page does not exist." />} />
+        </Route>
+      </Routes>
+    </ToastProvider>
   );
 }

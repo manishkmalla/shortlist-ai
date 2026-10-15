@@ -159,7 +159,7 @@ Each phase ends with something deployable and tested. Tick tasks as done.
 - Exit: scaffold builds and tests green (done); wireframes approved (pending).
 
 ### Phase 1 - Static hosting + accounts
-- [ ] `WebStack` (S3 + CloudFront) and `AuthStack` (Cognito with self sign-up).
+- [x] `WebStack` (S3 + CloudFront) and `AuthStack` (Cognito with self sign-up).
 - [ ] Frontend auth screens: sign up, verify email code, login, forgot/reset password, logout; protected routes; app shell (navigation, user menu, design tokens, light/dark theme).
 - [ ] Post-confirmation Lambda creating the user profile; `GET/PUT/DELETE /me`.
 - [ ] First `cdk deploy`; verify a fresh user can sign up and log in on the CloudFront URL.

@@ -1,0 +1,9 @@
+{
+  "name": "@scanpro/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "build": "tsc --noEmit -p .", "typecheck": "tsc --noEmit -p ." },
+  "dependencies": { "@scanpro/shared": "*" },
+  "devDependencies": { "@types/aws-lambda": "^8.10.145", "@types/node": "^22.0.0" }
+}

@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ScanPro wireframes (low fidelity)</title>
+<style>
+:root{--ink:#0f172a;--mut:#64748b;--line:#e2e8f0;--bg:#f8fafc;--acc:#4f46e5;--accbg:#eef2ff;--ok:#16a34a;--warn:#d97706;--bad:#dc2626}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.5 system-ui,-apple-system,'Segoe UI',sans-serif;color:var(--ink);background:#e5e7eb}
+header.doc{padding:20px 28px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+header.doc h1{margin:0;font-size:18px}
+header.doc nav{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
+header.doc a{font-size:12px;padding:3px 10px;border:1px solid var(--line);border-radius:99px;color:var(--ink);text-decoration:none;background:var(--bg)}
+header.doc a:hover{border-color:var(--acc);color:var(--acc)}
+main{max-width:1180px;margin:0 auto;padding:24px 28px 80px}
+section{margin-bottom:48px}
+section>h2{font-size:15px;margin:0 0 4px}
+section>p.note{margin:0 0 14px;color:var(--mut);font-size:13px}
+.row{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
+.screen{background:#fff;border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);flex:1 1 340px;min-width:320px}
+.screen.wide{flex:1 1 100%}
+.cap{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);padding:8px 14px;background:var(--bg);border-bottom:1px solid var(--line)}
+.body{padding:20px}
+.center{text-align:center}
+.logo{font-weight:700;font-size:16px;display:flex;align-items:center;gap:8px}
+.logo i{width:22px;height:22px;border-radius:6px;background:var(--acc);display:inline-block}
+h3{margin:0 0 4px;font-size:18px}
+p{margin:4px 0 12px;color:var(--mut)}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;font-weight:600;margin-bottom:4px}
+.inp{border:1px solid #cbd5e1;border-radius:8px;padding:9px 11px;color:var(--mut);background:#fff;font-size:13px}
+.inp.area{min-height:120px}
+.btn{display:inline-block;padding:9px 16px;border-radius:8px;background:var(--acc);color:#fff;font-weight:600;font-size:13px;border:0}
+.btn.block{display:block;text-align:center}
+.btn.ghost{background:#fff;color:var(--ink);border:1px solid #cbd5e1}
+.btn.sm{padding:5px 10px;font-size:12px}
+.link{color:var(--acc);font-size:13px}
+.stepper{display:flex;gap:6px;margin-bottom:18px}
+.stepper span{flex:1;height:5px;border-radius:9px;background:var(--line)}
+.stepper span.on{background:var(--acc)}
+.steplabel{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.guide{border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:12px 14px;margin:10px 0}
+.guide summary{font-weight:600;cursor:pointer}
+.guide ol{margin:8px 0 0 18px;padding:0;font-size:13px;color:#334155}
+.guide li{margin-bottom:3px}
+.badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:99px;font-weight:600}
+.b-ok{background:#dcfce7;color:#166534}.b-warn{background:#fef3c7;color:#92400e}.b-bad{background:#fee2e2;color:#991b1b}.b-n{background:#e2e8f0;color:#334155}.b-acc{background:var(--accbg);color:var(--acc)}
+.app{display:flex;min-height:340px}
+.side{width:150px;border-right:1px solid var(--line);padding:14px 10px;background:var(--bg);flex-shrink:0}
+.side .logo{margin-bottom:14px}
+.side div.nav{padding:7px 10px;border-radius:7px;font-size:13px;color:#334155;margin-bottom:2px}
+.side div.nav.on{background:var(--accbg);color:var(--acc);font-weight:600}
+.side .keystat{margin-top:18px;font-size:11px;color:var(--mut)}
+.main{flex:1;padding:18px 22px;min-width:0}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.card{border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px;background:#fff}
+.ring{width:84px;height:84px;border-radius:50%;border:7px solid var(--ok);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;flex-shrink:0}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:14px 0}
+.tabs span{padding:8px 12px;font-size:13px;color:var(--mut);border-bottom:2px solid transparent}
+.tabs span.on{color:var(--acc);border-color:var(--acc);font-weight:600}
+.list-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.list-row:last-child{border:0}
+.grow{flex:1;min-width:0}
+.sm-t{font-size:12px;color:var(--mut)}
+.drop{border:2px dashed #cbd5e1;border-radius:10px;padding:26px;text-align:center;color:var(--mut);background:var(--bg)}
+.banner{background:#fef3c7;color:#92400e;padding:8px 14px;font-size:13px;display:flex;justify-content:space-between}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.diff{font:12px/1.6 ui-monospace,monospace;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px}
+.diff .a{background:#dcfce7}.diff .r{background:#fee2e2;text-decoration:line-through}
+.kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.kanban .col{background:var(--bg);border-radius:8px;padding:8px}
+.kanban .col h4{margin:0 0 6px;font-size:11px;text-transform:uppercase;color:var(--mut);letter-spacing:.06em}
+.kanban .tile{background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:6px;font-size:12px}
+.notes{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 16px;font-size:13px;margin-bottom:28px}
+.notes li{margin-bottom:2px}
+@media(max-width:700px){.cols,.kanban{grid-template-columns:1fr}.side{display:none}}
+</style>
+</head>
+<body>
+<header class="doc">
+  <h1>ScanPro wireframes <span class="badge b-n">low fidelity, for sign-off</span></h1>
+  <nav>
+    <a href="#auth">1 Sign in / up</a><a href="#onboarding">2 Onboarding wizard</a><a href="#new">3 New Analysis</a>
+    <a href="#results">4 Results</a><a href="#resumes">5 My Resumes</a><a href="#settings">6 Settings</a><a href="#apps">7 Applications</a><a href="#tokens">Design tokens</a>
+  </nav>
+</header>
+<main>
+
+<div class="notes">
+  <strong>Review checklist</strong>
+  <ul>
+    <li>Layout and flow only. Final colours, type and spacing follow the design tokens at the bottom.</li>
+    <li>Light theme shown; dark mode uses the same layout.</li>
+    <li>Flow: sign up, verify email, onboarding wizard (API key, then resume), New Analysis, Results.</li>
+  </ul>
+</div>
+
+<!-- 1 AUTH -->
+<section id="auth">
+  <h2>1. Sign in / Sign up</h2>
+  <p class="note">Centered card, no sidebar. Email verification code step after sign up.</p>
+  <div class="row">
+    <div class="screen"><div class="cap">Sign in</div><div class="body">
+      <div class="logo center" style="justify-content:center;margin-bottom:14px"><i></i>ScanPro</div>
+      <h3 class="center">Welcome back</h3><p class="center">Sign in to your account</p>
+      <div class="field"><label>Email</label><div class="inp">you@example.com</div></div>
+      <div class="field"><label>Password</label><div class="inp">••••••••••</div></div>
+      <div style="text-align:right;margin-bottom:10px"><span class="link">Forgot password?</span></div>
+      <div class="btn block">Sign in</div>
+      <p class="center" style="margin-top:12px">New here? <span class="link">Create an account</span></p>
+    </div></div>
+    <div class="screen"><div class="cap">Sign up</div><div class="body">
+      <div class="logo" style="justify-content:center;margin-bottom:14px"><i></i>ScanPro</div>
+      <h3 class="center">Create your account</h3><p class="center">Tailor your resume to any job in minutes</p>
+      <div class="field"><label>Full name</label><div class="inp">Alex Example</div></div>
+      <div class="field"><label>Email</label><div class="inp">you@example.com</div></div>
+      <div class="field"><label>Password</label><div class="inp">At least 12 characters</div></div>
+      <div class="sm-t" style="margin-bottom:10px">By signing up you agree to the Terms and Privacy Policy.</div>
+      <div class="btn block">Create account</div>
+    </div></div>
+    <div class="screen"><div class="cap">Verify email</div><div class="body">
+      <h3 class="center">Check your email</h3><p class="center">We sent a 6-digit code to you@example.com</p>
+      <div style="display:flex;gap:6px;justify-content:center;margin:14px 0">
+        <div class="inp" style="width:36px;text-align:center">4</div><div class="inp" style="width:36px;text-align:center">2</div><div class="inp" style="width:36px;text-align:center">&nbsp;</div><div class="inp" style="width:36px">&nbsp;</div><div class="inp" style="width:36px">&nbsp;</div><div class="inp" style="width:36px">&nbsp;</div>
+      </div>
+      <div class="btn block">Verify</div>
+      <p class="center" style="margin-top:12px"><span class="link">Resend code</span></p>
+    </div></div>
+  </div>
+</section>
+
+<!-- 2 ONBOARDING -->
+<section id="onboarding">
+  <h2>2. Onboarding wizard</h2>
+  <p class="note">Shown after first login until complete. Progress saved server-side. The API key step is required; the resume step is skippable. Same key form is reused in Settings.</p>
+  <div class="row">
+    <div class="screen"><div class="cap">Step 1 of 4 - Welcome</div><div class="body">
+      <div class="stepper"><span class="on"></span><span></span><span></span><span></span></div>
+      <h3>Welcome, Alex</h3>
+      <p>ScanPro scores your fit for a job, finds gaps, and writes a tailored resume and cover letter.</p>
+      <div class="card"><strong>Runs on your own Anthropic key</strong><p style="margin:4px 0 0">You pay Anthropic directly, pay-as-you-go. A full analysis costs a few cents. We never charge you for AI usage.</p></div>
+      <div class="btn block">Get started</div>
+    </div></div>
+    <div class="screen"><div class="cap">Step 2 of 4 - Add your API key (required)</div><div class="body">
+      <div class="stepper"><span class="on"></span><span class="on"></span><span></span><span></span></div>
+      <h3>Connect your Anthropic key</h3>
+      <p>Needed to run analyses. Stored encrypted and never shown again.</p>
+      <details class="guide" open><summary>How to get your key (2 minutes)</summary>
+        <ol>
+          <li>Go to <span class="link">console.anthropic.com</span> and sign up or log in.</li>
+          <li>Settings, Billing: add a payment method and a small credit.</li>
+          <li>Settings, API Keys: click <em>Create Key</em>, name it "ScanPro".</li>
+          <li>Copy the key now (starts with <code>sk-ant-</code>). It is shown once.</li>
+          <li>Paste it below, then click Save and test.</li>
+          <li>Optional: set a monthly spend limit in the Anthropic console.</li>
+        </ol>
+        <div style="margin-top:8px"><span class="link">Open Anthropic console (new tab) ↗</span></div>
+      </details>
+      <div class="field"><label>Anthropic API key</label><div class="inp">sk-ant-••••••••••••••••••••</div></div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><div class="btn">Save and test</div><span class="badge b-ok">✓ Key verified: sk-ant-...A1b2</span></div>
+      <div class="sm-t" style="margin-bottom:12px">Encrypted at rest. Used only to call Anthropic for you. Remove it any time in Settings.</div>
+      <div class="btn block">Continue</div>
+    </div></div>
+    <div class="screen"><div class="cap">Step 2 - error state</div><div class="body">
+      <div class="stepper"><span class="on"></span><span class="on"></span><span></span><span></span></div>
+      <h3>Connect your Anthropic key</h3>
+      <div class="field"><label>Anthropic API key</label><div class="inp" style="border-color:var(--bad)">sk-ant-bad</div>
+        <div style="color:var(--bad);font-size:12px;margin-top:4px">This key was rejected by Anthropic. Check you copied the whole key, or create a new one.</div></div>
+      <div class="card" style="background:#fef3c7;border-color:#fde68a"><strong>No credit?</strong><div class="sm-t">If the key is valid but has no balance, add credit in the Anthropic console, then test again.</div></div>
+      <div class="btn block" style="opacity:.5">Continue (disabled until verified)</div>
+    </div></div>
+    <div class="screen"><div class="cap">Step 3 of 4 - First resume (skippable)</div><div class="body">
+      <div class="stepper"><span class="on"></span><span class="on"></span><span class="on"></span><span></span></div>
+      <h3>Add your resume</h3><p>Upload one now, add more later.</p>
+      <div class="drop">Drag and drop PDF, DOCX or TXT<br><span class="btn ghost sm" style="margin-top:8px">Choose files</span><div class="sm-t" style="margin-top:6px">Max 5 MB each</div></div>
+      <div style="text-align:center;margin:8px 0"><span class="link">or paste text instead</span></div>
+      <div style="display:flex;gap:8px"><div class="btn ghost" style="flex:1;text-align:center">Skip for now</div><div class="btn" style="flex:1;text-align:center">Continue</div></div>
+    </div></div>
+    <div class="screen"><div class="cap">Step 4 of 4 - Done</div><div class="body center">
+      <div class="stepper"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span></div>
+      <h3>You're all set</h3><p>Key verified. 1 resume added.</p>
+      <div class="btn block">Analyse your first job</div>
+    </div></div>
+  </div>
+</section>
+
+<!-- 3 NEW ANALYSIS -->
+<section id="new">
+  <h2>3. New Analysis (3-step flow)</h2>
+  <p class="note">One decision per step. Back/Next at the bottom. Generation runs in the background; the user is taken to the Results page which fills in as pieces finish.</p>
+  <div class="row">
+    <div class="screen"><div class="cap">Step 1 - Job description</div><div class="body">
+      <div class="stepper"><span class="on"></span><span></span><span></span></div>
+      <div class="steplabel">Step 1 of 3</div><h3>Paste the job description</h3>
+      <div class="inp area">Paste the full job ad here...</div>
+      <div class="sm-t" style="margin:6px 0 12px">Optional: job URL for your tracker <span class="inp" style="display:block;margin-top:4px">https://...</span></div>
+      <div class="btn block">Next</div>
+    </div></div>
+    <div class="screen"><div class="cap">Step 2 - Resume</div><div class="body">
+      <div class="stepper"><span class="on"></span><span class="on"></span><span></span></div>
+      <div class="steplabel">Step 2 of 3</div><h3>Choose a resume</h3>
+      <div class="card" style="border-color:var(--acc);background:var(--accbg)"><strong>AI Engineer</strong> <span class="badge b-acc">Default</span><div class="sm-t">Updated 3 Oct - 1.4k words</div></div>
+      <div class="card"><strong>Full Stack Developer</strong><div class="sm-t">Updated 12 Sep - 1.2k words</div></div>
+      <div class="sm-t" style="margin-bottom:10px"><span class="link">Suggest the best match for this job</span> · <span class="link">Upload another</span></div>
+      <div style="display:flex;gap:8px"><div class="btn ghost" style="flex:1;text-align:center">Back</div><div class="btn" style="flex:1;text-align:center">Next</div></div>
+    </div></div>
+    <div class="screen"><div class="cap">Step 3 - Review and run</div><div class="body">
+      <div class="stepper"><span class="on"></span><span class="on"></span><span class="on"></span></div>
+      <div class="steplabel">Step 3 of 3</div><h3>Ready to analyse</h3>
+      <div class="card"><div class="sm-t">Job</div>Senior AI Engineer (from pasted text) <span class="link">edit</span></div>
+      <div class="card"><div class="sm-t">Resume</div>AI Engineer <span class="link">change</span></div>
+      <div class="field"><div class="sm-t" style="margin-bottom:6px">What to generate</div>
+        ☑ Match score and overview &nbsp; ☑ Gap analysis and tips<br>☑ Cover letter &nbsp; ☑ Tailored resume</div>
+      <div class="sm-t" style="margin-bottom:10px">Uses your Anthropic key. Estimated cost: a few cents.</div>
+      <div style="display:flex;gap:8px"><div class="btn ghost" style="flex:1;text-align:center">Back</div><div class="btn" style="flex:2;text-align:center">Run analysis</div></div>
+    </div></div>
+  </div>
+</section>
+
+<!-- 4 RESULTS -->
+<section id="results">
+  <h2>4. Results page</h2>
+  <p class="note">Sticky summary header, then tabs. Each section loads independently (skeleton, then content, with per-section retry on failure). Actions sit at the top right of every section.</p>
+  <div class="row">
+    <div class="screen wide"><div class="cap">Results - Overview tab, inside the app shell</div>
+      <div class="app">
+        <div class="side"><div class="logo"><i></i>ScanPro</div>
+          <div class="nav">Applications</div><div class="nav on">New Analysis</div><div class="nav">My Resumes</div><div class="nav">Settings</div>
+          <div class="keystat"><span class="badge b-ok">Key OK</span></div></div>
+        <div class="main">
+          <div class="topbar"><div><span class="sm-t">Applications /</span> <strong>Senior AI Engineer · Acme</strong></div><div style="display:flex;gap:8px"><span class="badge b-n">Status: Saved ▾</span><span class="btn ghost sm">Regenerate</span></div></div>
+          <div class="card" style="display:flex;gap:16px;align-items:center"><div class="ring">78</div>
+            <div class="grow"><h3 style="margin:0">Strong Match</h3><div class="sm-t">Senior AI Engineer · Acme · using "AI Engineer" resume</div><p style="margin:6px 0 0">Strong on AWS and LLM delivery; light on formal people-management evidence.</p></div></div>
+          <div class="tabs"><span class="on">Overview</span><span>Cover letter</span><span>Gaps and tips</span><span>Tailored resume</span><span>Chat</span></div>
+          <div class="cols">
+            <div><div class="steplabel">Strengths</div><div class="card" style="border-left:3px solid var(--ok)">Production LLM pipelines on AWS</div><div class="card" style="border-left:3px solid var(--ok)">CDK and serverless depth</div></div>
+            <div><div class="steplabel">Gaps</div><div class="card" style="border-left:3px solid var(--warn)">No evidence of team management <span class="badge b-warn">medium</span></div><div class="card" style="border-left:3px solid var(--bad)">Missing: Kubernetes <span class="badge b-bad">high</span></div></div>
+          </div>
+          <div class="card"><div class="steplabel">Keywords</div><span class="badge b-ok">Python ✓</span> <span class="badge b-ok">AWS ✓</span> <span class="badge b-ok">RAG ✓</span> <span class="badge b-bad">Kubernetes ✗</span> <span class="badge b-warn">Terraform ~</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="screen"><div class="cap">Tailored resume tab</div><div class="body">
+      <div class="topbar"><strong>Tailored resume</strong><div style="display:flex;gap:6px"><span class="btn ghost sm">Copy</span><span class="btn sm">Download ▾</span></div></div>
+      <div class="sm-t" style="margin-bottom:6px">Toggle: <strong>Changes</strong> | Edit | Preview. Downloads: PDF, DOCX, TXT.</div>
+      <div class="diff"><div>PROFESSIONAL SUMMARY</div><div class="r">Full-stack engineer with 8 years experience.</div><div class="a">AI engineer with 8+ years building production LLM systems on AWS.</div><div>&nbsp;</div><div class="a">+ Added: Kubernetes exposure (only if true in your resume)</div></div>
+      <div style="display:flex;gap:6px;margin-top:8px"><span class="badge b-ok">Accept</span><span class="badge b-bad">Reject</span><span class="sm-t">per change</span></div>
+      <div class="card" style="margin-top:10px;background:#fff7ed;border-color:#fed7aa"><strong>Honesty check</strong><div class="sm-t">1 item not found in your original resume: "Kubernetes". Review before using.</div></div>
+      <div class="btn ghost sm">Save as new resume version</div>
+    </div></div>
+    <div class="screen"><div class="cap">Chat tab (bullet assistant)</div><div class="body">
+      <div class="sm-t" style="margin-bottom:8px">Select a bullet in the tailored resume, or paste one.</div>
+      <div class="card" style="background:var(--bg)">"Led architectural decisions..." <span class="link">Rewrite accurately</span></div>
+      <div class="card" style="background:var(--accbg)">Suggested: "Contributed to architectural decisions on..."<div style="margin-top:6px"><span class="btn sm">Replace in resume</span> <span class="btn ghost sm">Copy</span></div></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"><span class="badge b-n">More concise</span><span class="badge b-n">Stronger verbs</span><span class="badge b-n">Fix accuracy</span><span class="badge b-n">Match JD</span></div>
+      <div class="inp">Ask for a change...</div>
+    </div></div>
+  </div>
+</section>
+
+<!-- 5 RESUMES -->
+<section id="resumes">
+  <h2>5. My Resumes</h2>
+  <p class="note">The library. No built-in resumes. Multi-upload, review extracted text, set default.</p>
+  <div class="row">
+    <div class="screen"><div class="cap">List</div><div class="body">
+      <div class="topbar"><h3 style="margin:0">My Resumes</h3><span class="btn sm">Upload resume</span></div>
+      <div class="list-row"><div class="grow"><strong>AI Engineer</strong> <span class="badge b-acc">Default</span><div class="sm-t">PDF · 3 Oct · ready</div></div><span class="sm-t">⋯</span></div>
+      <div class="list-row"><div class="grow"><strong>Full Stack Developer</strong><div class="sm-t">DOCX · 12 Sep · ready</div></div><span class="sm-t">⋯</span></div>
+      <div class="list-row"><div class="grow"><strong>Tech Lead (tailored: Acme)</strong><div class="sm-t">Version of "AI Engineer" · 14 Oct</div></div><span class="sm-t">⋯</span></div>
+      <div class="list-row"><div class="grow"><strong>scan.pdf</strong><div class="sm-t">PDF · <span style="color:var(--bad)">Failed: no text found. Paste text instead.</span></div></div><span class="link">Fix</span></div>
+      <div class="sm-t" style="margin-top:8px">3 of 10 used. Row menu: rename, duplicate, set default, download original, delete.</div>
+    </div></div>
+    <div class="screen"><div class="cap">Upload (multi-file) and review text</div><div class="body">
+      <div class="drop" style="padding:16px">Drop files here (multiple allowed)</div>
+      <div class="list-row"><div class="grow">resume_v2.pdf<div style="height:5px;background:var(--line);border-radius:9px;margin-top:4px"><div style="width:70%;height:100%;background:var(--acc);border-radius:9px"></div></div></div><span class="sm-t">Uploading</span></div>
+      <div class="list-row"><div class="grow">leadership.docx</div><span class="badge b-warn">Extracting</span></div>
+      <hr style="border:0;border-top:1px solid var(--line);margin:12px 0">
+      <div class="steplabel">Review extracted text</div>
+      <div class="field"><label>Label</label><div class="inp">AI Engineer</div></div>
+      <div class="inp area" style="min-height:90px;font-family:ui-monospace,monospace;font-size:12px">ALEX EXAMPLE\nalex@example.com | Perth WA\n\nPROFESSIONAL SUMMARY ...</div>
+      <div class="sm-t" style="margin:6px 0 10px">Fix anything the parser got wrong. This text is what the AI reads.</div>
+      <div class="btn block">Save resume</div>
+    </div></div>
+  </div>
+</section>
+
+<!-- 6 SETTINGS -->
+<section id="settings">
+  <h2>6. Settings</h2>
+  <p class="note">Left tabs: API key, Profile, Preferences, Data and account. The key form is the same component as in onboarding.</p>
+  <div class="row">
+    <div class="screen wide"><div class="cap">Settings - API key</div>
+      <div class="banner"><span>Your Anthropic key was rejected on the last run. Update it to continue.</span><span class="link" style="color:#92400e">Fix now</span></div>
+      <div class="app">
+        <div class="side"><div class="logo"><i></i>ScanPro</div><div class="nav">Applications</div><div class="nav">New Analysis</div><div class="nav">My Resumes</div><div class="nav on">Settings</div></div>
+        <div class="main">
+          <div class="tabs" style="margin-top:0"><span class="on">API key</span><span>Profile</span><span>Preferences</span><span>Data and account</span></div>
+          <div class="cols">
+            <div>
+              <div class="card"><div class="steplabel">Current key</div><strong>sk-ant-...A1b2</strong> <span class="badge b-bad">Invalid</span><div class="sm-t">Last verified 3 Oct</div>
+                <div style="margin-top:8px;display:flex;gap:6px"><span class="btn ghost sm">Test connection</span><span class="btn ghost sm" style="color:var(--bad)">Remove</span></div></div>
+              <div class="field"><label>Replace key</label><div class="inp">sk-ant-...</div></div>
+              <div class="btn sm">Save and test</div>
+              <div class="field" style="margin-top:14px"><label>Model</label><div class="inp">Default (recommended) ▾</div></div>
+            </div>
+            <details class="guide" open style="margin:0"><summary>How to get your key</summary>
+              <ol><li>Sign up or log in at console.anthropic.com</li><li>Add billing and a small credit</li><li>Settings, API Keys, Create Key</li><li>Copy it (shown once)</li><li>Paste here, Save and test</li><li>Optional: set a monthly spend limit</li></ol>
+              <div class="sm-t" style="margin-top:8px">Encrypted at rest. Used only to call Anthropic for you.</div></details>
+          </div>
+          <div class="card" style="margin-top:14px"><div class="steplabel">Danger zone (Data and account tab)</div><span class="btn ghost sm">Export my data</span> <span class="btn ghost sm" style="color:var(--bad);border-color:var(--bad)">Delete account and all data</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 7 APPLICATIONS -->
+<section id="apps">
+  <h2>7. Applications (tracker)</h2>
+  <p class="note">Default landing page after onboarding. List with search and filters; board view toggle.</p>
+  <div class="row">
+    <div class="screen"><div class="cap">List view</div><div class="body">
+      <div class="topbar"><h3 style="margin:0">Applications</h3><span class="btn sm">+ New analysis</span></div>
+      <div style="display:flex;gap:8px;margin-bottom:10px"><div class="inp grow">Search company or role...</div><div class="inp">Status ▾</div><div class="inp">List | Board</div></div>
+      <div class="list-row"><div class="ring" style="width:42px;height:42px;border-width:4px;font-size:13px">78</div><div class="grow"><strong>Senior AI Engineer</strong> · Acme<div class="sm-t">AI Engineer resume · 14 Oct</div></div><span class="badge b-acc">Applied</span></div>
+      <div class="list-row"><div class="ring" style="width:42px;height:42px;border-width:4px;font-size:13px;border-color:var(--warn)">58</div><div class="grow"><strong>Platform Engineer</strong> · Globex<div class="sm-t">Full Stack resume · 10 Oct</div></div><span class="badge b-n">Saved</span></div>
+      <div class="list-row"><div class="ring" style="width:42px;height:42px;border-width:4px;font-size:13px">85</div><div class="grow"><strong>ML Engineer</strong> · Initech<div class="sm-t">AI Engineer resume · 2 Oct</div></div><span class="badge b-ok">Interview</span></div>
+    </div></div>
+    <div class="screen"><div class="cap">Board view</div><div class="body">
+      <div class="kanban">
+        <div class="col"><h4>Saved</h4><div class="tile">Platform Eng<br><span class="sm-t">Globex</span></div></div>
+        <div class="col"><h4>Applied</h4><div class="tile">Sr AI Eng<br><span class="sm-t">Acme</span></div></div>
+        <div class="col"><h4>Interview</h4><div class="tile">ML Eng<br><span class="sm-t">Initech</span></div></div>
+        <div class="col"><h4>Offer / Closed</h4></div>
+      </div>
+      <div class="sm-t" style="margin-top:8px">Drag tiles between columns. Empty state: "No applications yet. Run your first analysis."</div>
+    </div></div>
+  </div>
+</section>
+
+<!-- TOKENS -->
+<section id="tokens">
+  <h2>Proposed design tokens (to confirm)</h2>
+  <div class="row">
+    <div class="screen"><div class="cap">Colour</div><div class="body">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <div style="width:90px"><div style="height:44px;border-radius:8px;background:#4f46e5"></div><div class="sm-t">Accent indigo-600</div></div>
+        <div style="width:90px"><div style="height:44px;border-radius:8px;background:#0f172a"></div><div class="sm-t">Text slate-900</div></div>
+        <div style="width:90px"><div style="height:44px;border-radius:8px;background:#f8fafc;border:1px solid var(--line)"></div><div class="sm-t">Surface slate-50</div></div>
+        <div style="width:90px"><div style="height:44px;border-radius:8px;background:#16a34a"></div><div class="sm-t">Good green-600</div></div>
+        <div style="width:90px"><div style="height:44px;border-radius:8px;background:#d97706"></div><div class="sm-t">Caution amber-600</div></div>
+        <div style="width:90px"><div style="height:44px;border-radius:8px;background:#dc2626"></div><div class="sm-t">Bad red-600</div></div>
+      </div>
+      <div class="sm-t" style="margin-top:10px">Dark mode: slate-950 background, slate-900 surfaces, same accent lightened to indigo-400.</div>
+    </div></div>
+    <div class="screen"><div class="cap">Type, space, shape</div><div class="body">
+      <div class="sm-t">System UI sans. Sizes: 12 / 14 (body) / 18 (headings) / 24 (page title). Weights 400, 600.</div>
+      <div class="sm-t" style="margin-top:6px">Spacing scale 4 / 8 / 12 / 16 / 24. Radius 8px controls, 10px cards. Single subtle shadow. Content max width 1100px, reading width 720px for letters and resumes.</div>
+      <div class="sm-t" style="margin-top:6px">Components: Button, Input, Textarea, Card, Tabs, Stepper, Dialog, Toast, Badge, Dropdown, FileDrop, EmptyState, Skeleton.</div>
+    </div></div>
+  </div>
+</section>
+
+</main>
+</body>
+</html>

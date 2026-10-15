@@ -1,0 +1,12 @@
+node_modules
+dist
+cdk.out
+.env*
+*.local.*
+samples/
+coverage
+.DS_Store
+*.tsbuildinfo
+
+# Owner prototype with personal resume data (local reference only)
+docs/reference-jobscan_pro_v3.html

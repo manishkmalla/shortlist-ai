@@ -7,4 +7,4 @@ const env = {
   region: process.env.CDK_DEFAULT_REGION ?? 'ap-southeast-2',
 };
 
-new BaseStack(app, 'ScanProBase', { env });
+new BaseStack(app, 'ShortlistAiBase', { env });

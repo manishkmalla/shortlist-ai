@@ -1,4 +1,4 @@
-# ScanPro Implementation Plan
+# Shortlist AI Implementation Plan
 
 **Product direction (updated):** a multi-user web app. Anyone can create an account, save their own resumes, and link **their own Anthropic API key** in Settings (with a built-in guide on how to get one). The owner hosts the app on a personal AWS account but never supplies or pays for model usage.
 
@@ -154,7 +154,7 @@ Each phase ends with something deployable and tested. Tick tasks as done.
 - [x] `git init`, `.gitignore`, project `.npmrc` pinning the public npm registry (global npm config points at an expired work CodeArtifact registry).
 - [x] Verified: `npm run typecheck`, `lint`, `test` (10 passing), `build`, `synth` all pass; `npm audit` clean.
 - [ ] Default Claude model ID and user allow-list (decide when building Phase 3; check current Anthropic model names then).
-- [ ] **Deferred by owner (do manually later):** AWS profile `scanpro-personal`, `cdk bootstrap`, AWS Budget alert (USD 10). Nothing is deployed yet; `cdk synth` needs no credentials.
+- [ ] **Deferred by owner (do manually later):** AWS profile `shortlist-ai-personal`, `cdk bootstrap`, AWS Budget alert (USD 10). Nothing is deployed yet; `cdk synth` needs no credentials.
 - [ ] First commit (waiting for owner go-ahead).
 - Exit: scaffold builds and tests green (done); wireframes approved (pending).
 

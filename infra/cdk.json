@@ -1,4 +1,4 @@
 {
-  "app": "npx tsx bin/scanpro.ts",
+  "app": "npx tsx bin/shortlist-ai.ts",
   "context": { "@aws-cdk/core:newStyleStackSynthesis": true }
 }

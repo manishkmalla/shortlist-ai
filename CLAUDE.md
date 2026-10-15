@@ -1,4 +1,4 @@
-# ScanPro (JobScan Pro v4)
+# Shortlist AI
 
 Multi-user job-application assistant (public sign-up). Each user creates an account, uploads and manages multiple of their own resumes (PDF/DOCX/TXT or pasted text), and **links their own Anthropic API key** (BYOK); the app never ships or pays for a shared key. Paste a job description (JD), pick one of their own uploaded resumes, and get: match score, gap analysis, tailored cover letter, ATS-optimised tailored resume, and a chat assistant to refine bullets. Rebuild of the single-file prototype in `docs/reference-jobscan_pro_v3.html` as a React + Tailwind SPA on AWS, defined with CDK and deployed to the owner's personal AWS account (end users need no AWS access).
 
@@ -22,7 +22,7 @@ Full roadmap: see `PLAN.md`. Read it before starting any phase.
 ## Repo layout (monorepo, npm workspaces)
 
 ```
-scanpro/
+shortlist-ai/
   CLAUDE.md  PLAN.md
   docs/reference-jobscan_pro_v3.html   # original prototype - behaviour reference only, do not edit
   apps/web/                            # React SPA
@@ -31,7 +31,7 @@ scanpro/
     src/{handlers,services,llm,prompts,schemas,repo}
   packages/shared/                     # Zod schemas + types shared by web and api
   infra/                               # CDK app
-    bin/scanpro.ts
+    bin/shortlist-ai.ts
     lib/{auth,data,api,web,pipeline}-stack.ts
   .github/workflows/
 ```
@@ -53,12 +53,12 @@ AWS profile setup and `cdk bootstrap` are deferred; the owner will deploy manual
 
 ## AWS conventions
 
-- Deploy only to the personal account via named profile `scanpro-personal`; region `ap-southeast-2` (Sydney). CloudFront certs must be in `us-east-1`.
+- Deploy only to the personal account via named profile `shortlist-ai-personal`; region `ap-southeast-2` (Sydney). CloudFront certs must be in `us-east-1`.
 - Never deploy or run destructive commands (`cdk destroy`, delete tables/buckets) without asking the user first. Always show `cdk diff` before `cdk deploy`.
 - Account/region come from env (`CDK_DEFAULT_ACCOUNT`/`CDK_DEFAULT_REGION`); never hardcode account IDs or commit them.
 - Stateful resources (DynamoDB, S3 user data, Cognito pool): `RemovalPolicy.RETAIN`, PITR on, deletion protection on. Stateless: `DESTROY` is fine.
 - Least-privilege IAM per Lambda via CDK grants; no `*` actions or resources. `kms:Decrypt` on the API-key CMK only for the generation/settings Lambdas.
-- Tag every resource: `app=scanpro`, `env=<dev|prod>`.
+- Tag every resource: `app=shortlist-ai`, `env=<dev|prod>`.
 - Set an AWS Budget alert (e.g. USD 10/month) and API Gateway + Lambda throttling/reserved concurrency. Sign-up is public, so add abuse controls: email verification, per-user rate limits, request size caps, optional WAF. LLM token costs are paid by each user's own key, not the owner.
 - Default model ID lives in config (SSM parameter / env `DEFAULT_MODEL_ID`), never inlined in handlers; users pick from an allow-list in Settings.
 
@@ -111,7 +111,7 @@ AWS profile setup and `cdk bootstrap` are deferred; the owner will deploy manual
   - collapsible step-by-step "How to get your key" guide:
     1. Go to console.anthropic.com and sign up or log in.
     2. Add billing: Settings > Billing, add a payment method and buy a small amount of credit (pay-as-you-go; a full analysis costs a few cents).
-    3. Open Settings > API Keys and click Create Key; name it "ScanPro".
+    3. Open Settings > API Keys and click Create Key; name it "Shortlist AI".
     4. Copy the key immediately (starts with `sk-ant-`); it is shown only once.
     5. Paste it here, click Save, then Test connection.
     6. Optional: set a monthly spend limit in the Anthropic console; revoke the key there at any time.

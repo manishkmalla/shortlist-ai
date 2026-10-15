@@ -1,4 +1,4 @@
-import { Duration, RemovalPolicy, Stack, Tags, type StackProps } from 'aws-cdk-lib';
+import { CfnOutput, Duration, RemovalPolicy, Stack, Tags, type StackProps } from 'aws-cdk-lib';
 import {
   AccountRecovery,
   Mfa,
@@ -55,5 +55,8 @@ export class AuthStack extends Stack {
       refreshTokenValidity: Duration.days(30),
       enableTokenRevocation: true,
     });
+
+    new CfnOutput(this, 'UserPoolId', { value: pool.userPoolId });
+    new CfnOutput(this, 'UserPoolClientId', { value: this.userPoolClient.userPoolClientId });
   }
 }

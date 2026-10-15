@@ -1,4 +1,4 @@
-import { Duration, RemovalPolicy, Stack, Tags, type StackProps } from 'aws-cdk-lib';
+import { CfnOutput, Duration, RemovalPolicy, Stack, Tags, type StackProps } from 'aws-cdk-lib';
 import {
   Distribution,
   HeadersFrameOption,
@@ -80,5 +80,9 @@ export class WebStack extends Stack {
         ttl: Duration.seconds(0),
       })),
     });
+
+    new CfnOutput(this, 'SiteUrl', { value: `https://${this.distribution.distributionDomainName}` });
+    new CfnOutput(this, 'SiteBucketName', { value: this.bucket.bucketName });
+    new CfnOutput(this, 'DistributionId', { value: this.distribution.distributionId });
   }
 }

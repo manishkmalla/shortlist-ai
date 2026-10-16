@@ -14,6 +14,7 @@ function build() {
     userPool: auth.userPool,
     userPoolClient: auth.userPoolClient,
     table: data.table,
+    apiKeyKey: data.apiKeyKey,
     allowedOrigin: 'https://example.cloudfront.net',
   });
   return Template.fromStack(api);
@@ -24,7 +25,7 @@ const template = build();
 describe('ApiStack', () => {
   it('every route requires the JWT authorizer', () => {
     const routes = template.findResources('AWS::ApiGatewayV2::Route');
-    expect(Object.keys(routes)).toHaveLength(3);
+    expect(Object.keys(routes)).toHaveLength(7);
     for (const r of Object.values(routes)) {
       expect(r.Properties.AuthorizationType).toBe('JWT');
     }
@@ -59,5 +60,36 @@ describe('ApiStack', () => {
     );
     expect(withCognito).toHaveLength(1);
     expect(withCognito[0]![0]).toMatch(/DeleteMe/);
+  });
+});
+
+describe('ApiStack API key routes', () => {
+  const policiesFor = (name: RegExp) =>
+    Object.entries(template.findResources('AWS::IAM::Policy')).filter(([id]) => name.test(id));
+  const actionsOf = (entries: [string, { Properties: { PolicyDocument: { Statement: { Action: string | string[] }[] } } }][]) =>
+    entries.flatMap(([, p]) => p.Properties.PolicyDocument.Statement.flatMap((s) => ([] as string[]).concat(s.Action)));
+
+  it('only the test function can decrypt', () => {
+    const all = Object.entries(template.findResources('AWS::IAM::Policy'));
+    const withDecrypt = all.filter(([, p]) => JSON.stringify(p).includes('kms:Decrypt'));
+    expect(withDecrypt).toHaveLength(1);
+    expect(withDecrypt[0]![0]).toMatch(/TestApiKey/);
+  });
+
+  it('saving can create data keys but not decrypt', () => {
+    const actions = actionsOf(policiesFor(/SaveApiKey/) as never);
+    expect(actions).toContain('kms:GenerateDataKey');
+    expect(actions).not.toContain('kms:Decrypt');
+  });
+
+  it('read and remove functions have no KMS access at all', () => {
+    for (const name of [/GetApiKeyStatus/, /RemoveApiKey/]) {
+      expect(JSON.stringify(policiesFor(name))).not.toContain('kms:');
+    }
+  });
+
+  it('the status function is read-only', () => {
+    const actions = actionsOf(policiesFor(/GetApiKeyStatus/) as never);
+    expect(actions.every((a) => a.startsWith('dynamodb:Get'))).toBe(true);
   });
 });

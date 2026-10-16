@@ -1,4 +1,4 @@
-import { BatchWriteCommand, GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { BatchWriteCommand, DeleteCommand, GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import type { Db } from './db';
 
 type Item = Record<string, unknown> & { pk: string; sk: string };
@@ -21,6 +21,11 @@ export function createFakeDb() {
           throw conditionFailed();
         }
         items.set(id(item.pk, item.sk), { ...item });
+        return {};
+      }
+      if (command instanceof DeleteCommand) {
+        const k = command.input.Key as Item;
+        items.delete(id(k.pk, k.sk));
         return {};
       }
       if (command instanceof UpdateCommand) {

@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { ToastProvider } from './components/ui';
@@ -8,11 +9,19 @@ import { ResetPasswordPage } from './features/auth/ResetPasswordPage';
 import { SignUpPage } from './features/auth/SignUpPage';
 import { useAuth } from './features/auth/AuthProvider';
 import { VerifyEmailPage } from './features/auth/VerifyEmailPage';
+import { useProfile } from './features/profile/hooks';
 import { PlaceholderPage } from './pages/PlaceholderPage';
+import { SettingsPage } from './pages/SettingsPage';
 
 function ShellRoute() {
   const { signOut } = useAuth();
-  return <AppShell onSignOut={() => void signOut()} />;
+  const { data: profile } = useProfile();
+  const qc = useQueryClient();
+  const handleSignOut = async () => {
+    await signOut();
+    qc.clear();
+  };
+  return <AppShell userName={profile?.name} onSignOut={() => void handleSignOut()} />;
 }
 
 export function App() {
@@ -33,7 +42,7 @@ export function App() {
             <Route index element={<PlaceholderPage title="New Analysis" description="Paste a job description to get started. Coming in Phase 3." />} />
             <Route path="applications" element={<PlaceholderPage title="Applications" description="Your analyses will appear here." />} />
             <Route path="resumes" element={<PlaceholderPage title="My Resumes" description="Upload and manage your resumes. Coming in Phase 2." />} />
-            <Route path="settings" element={<PlaceholderPage title="Settings" description="Anthropic API key and model settings. Coming in Phase 1b." />} />
+            <Route path="settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Route>

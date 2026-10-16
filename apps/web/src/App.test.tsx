@@ -2,11 +2,13 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { AuthProvider } from './features/auth/AuthProvider';
 import { authClient } from './features/auth/authClient';
+import { profileApi } from './features/profile/profileApi';
 
 vi.mock('./features/auth/authClient', () => ({
   authClient: {
@@ -21,7 +23,20 @@ vi.mock('./features/auth/authClient', () => ({
   },
 }));
 
+vi.mock('./features/profile/profileApi', () => ({
+  profileApi: { get: vi.fn(), rename: vi.fn(), deleteAccount: vi.fn() },
+}));
+
 const client = vi.mocked(authClient);
+const api = vi.mocked(profileApi);
+
+const profile = {
+  name: 'Alex Example',
+  email: 'alex@example.com',
+  onboardingStep: 'welcome' as const,
+  onboardingCompletedAt: null,
+  createdAt: '2026-01-01T00:00:00.000Z',
+};
 
 beforeAll(() => {
   window.matchMedia = (query: string) =>
@@ -36,17 +51,21 @@ beforeAll(() => {
 beforeEach(() => {
   vi.resetAllMocks();
   client.currentUser.mockResolvedValue(null);
+  api.get.mockResolvedValue(profile);
 });
 
 afterEach(cleanup);
 
 function renderApp(path: string) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[path]}>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
@@ -191,5 +210,78 @@ describe('sign out', () => {
     await user.click(await screen.findByRole('menuitem', { name: 'Sign out' }));
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
     expect(client.logout).toHaveBeenCalled();
+  });
+});
+
+describe('account settings', () => {
+  const signedIn = () => client.currentUser.mockResolvedValue({ email: 'alex@example.com', name: 'Alex Example' });
+
+  it('shows the profile name in the account menu', async () => {
+    signedIn();
+    const user = userEvent.setup();
+    renderApp('/');
+    const triggers = await screen.findAllByRole('button', { name: 'Account' });
+    await user.click(triggers[0]!);
+    expect(await screen.findByText('Alex Example')).toBeInTheDocument();
+  });
+
+  it('renames the user', async () => {
+    signedIn();
+    api.rename.mockResolvedValue({ ...profile, name: 'Alex Renamed' });
+    const user = userEvent.setup();
+    renderApp('/settings');
+    const input = await screen.findByLabelText('Full name');
+    expect(screen.getByRole('button', { name: 'Save name' })).toBeDisabled();
+    await user.clear(input);
+    await user.type(input, 'Alex Renamed');
+    await user.click(screen.getByRole('button', { name: 'Save name' }));
+    expect(api.rename).toHaveBeenCalledWith({ name: 'Alex Renamed' });
+    expect(await screen.findByText('Name updated')).toBeInTheDocument();
+  });
+
+  it('rejects an empty name without calling the API', async () => {
+    signedIn();
+    const user = userEvent.setup();
+    renderApp('/settings');
+    const input = await screen.findByLabelText('Full name');
+    await user.clear(input);
+    await user.click(screen.getByRole('button', { name: 'Save name' }));
+    expect(api.rename).not.toHaveBeenCalled();
+  });
+
+  it('offers a retry when the profile fails to load', async () => {
+    signedIn();
+    api.get.mockRejectedValue(new Error('boom'));
+    renderApp('/settings');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not load your profile.');
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  it('deletes the account only after typing the confirmation word', async () => {
+    signedIn();
+    api.deleteAccount.mockResolvedValue(undefined);
+    client.logout.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderApp('/settings');
+    await user.click(await screen.findByRole('button', { name: 'Delete account' }));
+    const confirm = await screen.findByRole('button', { name: 'Delete everything' });
+    expect(confirm).toBeDisabled();
+    await user.type(screen.getByLabelText('Type DELETE to confirm'), 'DELETE');
+    await user.click(confirm);
+    expect(api.deleteAccount).toHaveBeenCalled();
+    expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
+    expect(client.logout).toHaveBeenCalled();
+  });
+
+  it('keeps the user signed in when deletion fails', async () => {
+    signedIn();
+    api.deleteAccount.mockRejectedValue(new Error('500'));
+    const user = userEvent.setup();
+    renderApp('/settings');
+    await user.click(await screen.findByRole('button', { name: 'Delete account' }));
+    await user.type(await screen.findByLabelText('Type DELETE to confirm'), 'DELETE');
+    await user.click(screen.getByRole('button', { name: 'Delete everything' }));
+    expect(await screen.findByText('Could not delete your account. Please try again.')).toBeInTheDocument();
+    expect(client.logout).not.toHaveBeenCalled();
   });
 });

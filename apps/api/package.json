@@ -3,7 +3,19 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "scripts": { "build": "tsc --noEmit -p .", "typecheck": "tsc --noEmit -p ." },
-  "dependencies": { "@shortlist-ai/shared": "*" },
-  "devDependencies": { "@types/aws-lambda": "^8.10.145", "@types/node": "^22.0.0" }
+  "scripts": {
+    "build": "tsc --noEmit -p .",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@aws-lambda-powertools/logger": "^2.36.0",
+    "@aws-sdk/client-cognito-identity-provider": "^3.1152.0",
+    "@aws-sdk/client-dynamodb": "^3.1152.0",
+    "@aws-sdk/lib-dynamodb": "^3.1152.0",
+    "@shortlist-ai/shared": "*"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^22.0.0"
+  }
 }

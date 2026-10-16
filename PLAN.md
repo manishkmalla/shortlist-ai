@@ -161,7 +161,7 @@ Each phase ends with something deployable and tested. Tick tasks as done.
 ### Phase 1 - Static hosting + accounts
 - [x] `WebStack` (S3 + CloudFront) and `AuthStack` (Cognito with self sign-up).
 - [x] Frontend auth screens: sign up, verify email code, login, forgot/reset password, logout; protected routes. (App shell, nav, user menu, design tokens, light/dark theme, shared components: done.)
-- [ ] Post-confirmation Lambda creating the user profile; `GET/PUT/DELETE /me`.
+- [x] Post-confirmation Lambda creating the user profile; `GET/PUT/DELETE /me` (backend done; web wiring pending).
 - [ ] First `cdk deploy`; verify a fresh user can sign up and log in on the CloudFront URL.
 - Exit: anyone can create an account and see an empty app shell.
 

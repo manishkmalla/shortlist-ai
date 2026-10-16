@@ -3,13 +3,17 @@ import {
   AccountRecovery,
   Mfa,
   UserPool,
+  UserPoolOperation,
   UserPoolClient,
   type IUserPool,
 } from 'aws-cdk-lib/aws-cognito';
+import type { ITable } from 'aws-cdk-lib/aws-dynamodb';
 import type { Construct } from 'constructs';
+import { apiFunction } from './lambda';
 
 export interface AuthStackProps extends StackProps {
   envName: string;
+  table: ITable;
 }
 
 /** Cognito User Pool with self sign-up and mandatory email verification. */
@@ -45,6 +49,13 @@ export class AuthStack extends Stack {
       deletionProtection: true,
     });
     this.userPool = pool;
+
+    // Creates the profile record once an email is verified. Write-only access to the table.
+    const postConfirmation = apiFunction(this, 'PostConfirmation', 'postConfirmation.ts', {
+      TABLE_NAME: props.table.tableName,
+    });
+    props.table.grant(postConfirmation, 'dynamodb:PutItem');
+    pool.addTrigger(UserPoolOperation.POST_CONFIRMATION, postConfirmation);
 
     this.userPoolClient = pool.addClient('WebClient', {
       generateSecret: false,

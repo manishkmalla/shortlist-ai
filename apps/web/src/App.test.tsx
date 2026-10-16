@@ -8,6 +8,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { App } from './App';
 import { AuthProvider } from './features/auth/AuthProvider';
 import { authClient } from './features/auth/authClient';
+import { apiKeyApi } from './features/apiKey/apiKeyApi';
 import { profileApi } from './features/profile/profileApi';
 
 vi.mock('./features/auth/authClient', () => ({
@@ -24,17 +25,23 @@ vi.mock('./features/auth/authClient', () => ({
 }));
 
 vi.mock('./features/profile/profileApi', () => ({
-  profileApi: { get: vi.fn(), rename: vi.fn(), deleteAccount: vi.fn() },
+  profileApi: { get: vi.fn(), update: vi.fn(), deleteAccount: vi.fn() },
+}));
+
+vi.mock('./features/apiKey/apiKeyApi', () => ({
+  apiKeyApi: { status: vi.fn(), save: vi.fn(), test: vi.fn(), remove: vi.fn() },
 }));
 
 const client = vi.mocked(authClient);
 const api = vi.mocked(profileApi);
+const keyApi = vi.mocked(apiKeyApi);
 
 const profile = {
   name: 'Alex Example',
   email: 'alex@example.com',
   onboardingStep: 'welcome' as const,
   onboardingCompletedAt: null,
+  modelId: 'claude-sonnet-5-5' as const,
   createdAt: '2026-01-01T00:00:00.000Z',
 };
 
@@ -52,6 +59,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   client.currentUser.mockResolvedValue(null);
   api.get.mockResolvedValue(profile);
+  keyApi.status.mockResolvedValue({ configured: true, lastFour: 'wxyz', validatedAt: '2026-01-01T00:00:00.000Z' });
 });
 
 afterEach(cleanup);
@@ -227,7 +235,7 @@ describe('account settings', () => {
 
   it('renames the user', async () => {
     signedIn();
-    api.rename.mockResolvedValue({ ...profile, name: 'Alex Renamed' });
+    api.update.mockResolvedValue({ ...profile, name: 'Alex Renamed' });
     const user = userEvent.setup();
     renderApp('/settings');
     const input = await screen.findByLabelText('Full name');
@@ -235,7 +243,7 @@ describe('account settings', () => {
     await user.clear(input);
     await user.type(input, 'Alex Renamed');
     await user.click(screen.getByRole('button', { name: 'Save name' }));
-    expect(api.rename).toHaveBeenCalledWith({ name: 'Alex Renamed' });
+    expect(api.update).toHaveBeenCalledWith({ name: 'Alex Renamed' });
     expect(await screen.findByText('Name updated')).toBeInTheDocument();
   });
 
@@ -246,7 +254,7 @@ describe('account settings', () => {
     const input = await screen.findByLabelText('Full name');
     await user.clear(input);
     await user.click(screen.getByRole('button', { name: 'Save name' }));
-    expect(api.rename).not.toHaveBeenCalled();
+    expect(api.update).not.toHaveBeenCalled();
   });
 
   it('offers a retry when the profile fails to load', async () => {

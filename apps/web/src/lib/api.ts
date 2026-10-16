@@ -15,7 +15,7 @@ export class ApiError extends Error {
 const errorBodySchema = z.object({ error: z.object({ code: z.string(), message: z.string() }) });
 
 interface RequestOptions<T> {
-  method?: 'GET' | 'PUT' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   body?: unknown;
   /** Validates the response body. Omit for endpoints that return 204. */
   schema?: z.ZodType<T>;
@@ -46,3 +46,7 @@ export async function apiRequest<T = void>(path: string, opts: RequestOptions<T>
   if (!opts.schema) return undefined as T;
   return opts.schema.parse(await res.json());
 }
+
+/** A message that is safe to show. ApiError messages are already friendly; anything else gets a generic one. */
+export const errorMessage = (e: unknown) =>
+  e instanceof ApiError ? e.message : 'Something went wrong. Please try again.';

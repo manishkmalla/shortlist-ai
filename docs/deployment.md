@@ -30,6 +30,8 @@ npm run diff -w infra
 npm run deploy -w infra
 ```
 
+The default model for users who have not chosen one is the CDK context `defaultModelId` (default `claude-sonnet-5-5`). Override with `npx cdk deploy --all -c defaultModelId=<id>` from `infra/`; the ID must be on the allow-list in `packages/shared/src/models.ts`.
+
 Stack outputs are printed after deploy and can be re-read in CloudFormation. Copy `UserPoolId`, `UserPoolClientId` and `ApiUrl` into `apps/web/.env.local`.
 
 Stateful resources (table, user pool) are retained and protected. Removing them requires manual steps by design.

@@ -10,10 +10,10 @@ export function useProfile() {
   return useQuery({ queryKey: profileKey, queryFn: () => profileApi.get(), enabled: status === 'signed-in' });
 }
 
-export function useRenameProfile() {
+export function useUpdateProfile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: UpdateProfileRequest) => profileApi.rename(body),
+    mutationFn: (body: UpdateProfileRequest) => profileApi.update(body),
     onSuccess: (profile) => qc.setQueryData(profileKey, profile),
   });
 }

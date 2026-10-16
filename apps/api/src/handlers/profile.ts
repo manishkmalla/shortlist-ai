@@ -1,5 +1,5 @@
 import type { APIGatewayProxyHandlerV2WithJWTAuthorizer } from 'aws-lambda';
-import { updateProfileRequestSchema } from '@shortlist-ai/shared';
+import { modelIdSchema, updateProfileRequestSchema } from '@shortlist-ai/shared';
 import { createIdentityAdmin } from '../lib/identity';
 import { errorResponse, identityFrom, json, parseBody, type ApiEvent } from '../lib/http';
 import { logger } from '../lib/logger';
@@ -11,6 +11,8 @@ function service(): ProfileService {
   return createProfileService({
     repo: createProfileRepo(createDb(), process.env.TABLE_NAME ?? ''),
     identity: createIdentityAdmin(process.env.USER_POOL_ID ?? ''),
+    // Config, not code. Fails fast if DEFAULT_MODEL_ID is missing or not on the allow-list.
+    defaultModelId: modelIdSchema.parse(process.env.DEFAULT_MODEL_ID),
   });
 }
 
@@ -22,8 +24,10 @@ export async function route(event: ApiEvent, svc: ProfileService) {
       return json(200, await svc.getOrCreate(me));
     case 'PUT': {
       const body = parseBody(event, updateProfileRequestSchema);
-      if (!body) return errorResponse(400, 'invalid_request', 'Provide a name between 1 and 100 characters.');
-      const updated = await svc.updateName(me.userId, body.name);
+      if (!body) {
+        return errorResponse(400, 'invalid_request', 'Provide a name (1 to 100 characters) or a supported model.');
+      }
+      const updated = await svc.update(me.userId, body);
       return updated ? json(200, updated) : errorResponse(404, 'not_found', 'Profile not found.');
     }
     case 'DELETE':

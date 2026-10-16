@@ -12,6 +12,7 @@ function setup() {
   const svc = createProfileService({
     repo: createProfileRepo(db, 't'),
     identity: { deleteUser },
+    defaultModelId: 'claude-sonnet-5-5',
     now: () => new Date('2026-01-01T00:00:00.000Z'),
   });
   return { svc, deleteUser };
@@ -43,6 +44,7 @@ describe('/me', () => {
       email: 'a@example.com',
       onboardingStep: 'welcome',
       onboardingCompletedAt: null,
+      modelId: 'claude-sonnet-5-5',
     });
   });
 
@@ -63,10 +65,33 @@ describe('/me', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it.each([{}, { name: '' }, { name: 'x'.repeat(101) }, 'nope'])('PUT rejects invalid body %j', async (body) => {
+  it.each([{}, { name: '' }, { name: 'x'.repeat(101) }, { modelId: 'gpt-4' }, { modelId: 'claude-opus-4-1' }, 'nope'])('PUT rejects invalid body %j', async (body) => {
     const { svc } = setup();
     await route(event('GET', 'a'), svc);
     expect(asResult(await route(event('PUT', 'a', body), svc)).statusCode).toBe(400);
+  });
+
+  it('PUT saves a model from the allow-list, and GET resolves it', async () => {
+    const { svc } = setup();
+    await route(event('GET', 'a'), svc);
+    const res = await route(event('PUT', 'a', { modelId: 'claude-opus-5-5' }), svc);
+    expect(parsed(res)).toMatchObject({ name: 'User a', modelId: 'claude-opus-5-5' });
+    expect(parsed(await route(event('GET', 'a'), svc)).modelId).toBe('claude-opus-5-5');
+  });
+
+  it('a model choice is per user and does not change the default for others', async () => {
+    const { svc } = setup();
+    await route(event('GET', 'a'), svc);
+    await route(event('GET', 'b'), svc);
+    await route(event('PUT', 'a', { modelId: 'claude-haiku-5-5' }), svc);
+    expect(parsed(await route(event('GET', 'b'), svc)).modelId).toBe('claude-sonnet-5-5');
+  });
+
+  it('PUT can change name and model together', async () => {
+    const { svc } = setup();
+    await route(event('GET', 'a'), svc);
+    const res = await route(event('PUT', 'a', { name: 'Alex New', modelId: 'claude-opus-5-5' }), svc);
+    expect(parsed(res)).toMatchObject({ name: 'Alex New', modelId: 'claude-opus-5-5' });
   });
 
   it('PUT returns 404 when there is no profile', async () => {

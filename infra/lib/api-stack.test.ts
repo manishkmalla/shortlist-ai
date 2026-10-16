@@ -15,6 +15,7 @@ function build() {
     userPoolClient: auth.userPoolClient,
     table: data.table,
     apiKeyKey: data.apiKeyKey,
+    defaultModelId: 'claude-sonnet-5-5',
     allowedOrigin: 'https://example.cloudfront.net',
   });
   return Template.fromStack(api);
@@ -91,5 +92,13 @@ describe('ApiStack API key routes', () => {
   it('the status function is read-only', () => {
     const actions = actionsOf(policiesFor(/GetApiKeyStatus/) as never);
     expect(actions.every((a) => a.startsWith('dynamodb:Get'))).toBe(true);
+  });
+});
+
+describe('ApiStack config', () => {
+  it('the default model comes from config, not code', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Environment: { Variables: Match.objectLike({ DEFAULT_MODEL_ID: 'claude-sonnet-5-5' }) },
+    });
   });
 });

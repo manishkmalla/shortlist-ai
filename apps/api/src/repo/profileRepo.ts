@@ -5,15 +5,16 @@ import {
   QueryCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { profileSchema, type Profile } from '@shortlist-ai/shared';
+import { storedProfileSchema, type StoredProfile, type UpdateProfileRequest } from '@shortlist-ai/shared';
 import type { Db } from './db';
 import { PROFILE_SK, userPk } from './keys';
 
 export interface ProfileRepo {
-  get(userId: string): Promise<Profile | null>;
+  get(userId: string): Promise<StoredProfile | null>;
   /** Creates the profile only if none exists. Returns the stored profile either way. */
-  createIfMissing(userId: string, profile: Profile): Promise<Profile>;
-  updateName(userId: string, name: string): Promise<Profile | null>;
+  createIfMissing(userId: string, profile: StoredProfile): Promise<StoredProfile>;
+  /** Updates the given fields. Returns null if the profile does not exist. */
+  update(userId: string, patch: Pick<UpdateProfileRequest, 'name' | 'modelId'>): Promise<StoredProfile | null>;
   /** Removes every item under the user's partition. */
   deleteAll(userId: string): Promise<void>;
 }
@@ -21,10 +22,10 @@ export interface ProfileRepo {
 export function createProfileRepo(db: Db, tableName: string): ProfileRepo {
   const key = (userId: string) => ({ pk: userPk(userId), sk: PROFILE_SK });
 
-  const parse = (item: Record<string, unknown> | undefined): Profile | null => {
+  const parse = (item: Record<string, unknown> | undefined): StoredProfile | null => {
     if (!item) return null;
     // Zod drops the pk/sk key attributes.
-    return profileSchema.parse(item);
+    return storedProfileSchema.parse(item);
   };
 
   const repo: ProfileRepo = {
@@ -52,16 +53,18 @@ export function createProfileRepo(db: Db, tableName: string): ProfileRepo {
       }
     },
 
-    async updateName(userId, name) {
+    async update(userId, patch) {
+      const fields = Object.entries(patch).filter(([, v]) => v !== undefined);
+      if (fields.length === 0) return repo.get(userId);
       try {
         const out = await db.send(
           new UpdateCommand({
             TableName: tableName,
             Key: key(userId),
-            UpdateExpression: 'SET #n = :n',
+            UpdateExpression: `SET ${fields.map(([k]) => `#${k} = :${k}`).join(', ')}`,
             ConditionExpression: 'attribute_exists(pk)',
-            ExpressionAttributeNames: { '#n': 'name' },
-            ExpressionAttributeValues: { ':n': name },
+            ExpressionAttributeNames: Object.fromEntries(fields.map(([k]) => [`#${k}`, k])),
+            ExpressionAttributeValues: Object.fromEntries(fields.map(([k, v]) => [`:${k}`, v])),
             ReturnValues: 'ALL_NEW',
           }),
         );

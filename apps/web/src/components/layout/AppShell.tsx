@@ -9,7 +9,7 @@ const nav = [
   { to: '/settings', label: 'Settings' },
 ];
 
-export function AppShell({ onSignOut }: { onSignOut?: () => void }) {
+export function AppShell({ userName, onSignOut }: { userName?: string; onSignOut?: () => void }) {
   return (
     <div className="min-h-screen md:grid md:grid-cols-[14rem_1fr]">
       <a
@@ -25,7 +25,7 @@ export function AppShell({ onSignOut }: { onSignOut?: () => void }) {
             Shortlist AI
           </div>
           <div className="md:hidden">
-            <UserMenu onSignOut={onSignOut} />
+            <UserMenu userName={userName} onSignOut={onSignOut} />
           </div>
         </div>
         <nav aria-label="Main" className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-col md:pb-0">
@@ -50,7 +50,7 @@ export function AppShell({ onSignOut }: { onSignOut?: () => void }) {
       </aside>
       <div className="flex min-w-0 flex-col">
         <header className="hidden justify-end px-8 py-4 md:flex">
-          <UserMenu onSignOut={onSignOut} />
+          <UserMenu userName={userName} onSignOut={onSignOut} />
         </header>
         <main id="main" className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 md:px-8">
           <Outlet />

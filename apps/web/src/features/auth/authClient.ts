@@ -2,6 +2,7 @@ import { Amplify } from 'aws-amplify';
 import {
   confirmResetPassword,
   confirmSignUp,
+  fetchAuthSession,
   fetchUserAttributes,
   getCurrentUser,
   resendSignUpCode,
@@ -57,6 +58,11 @@ export const authClient = {
   },
   async completePasswordReset(email: string, code: string, newPassword: string) {
     await confirmResetPassword({ username: email, confirmationCode: code, newPassword });
+  },
+  /** The ID token for API calls (it carries the email and name claims). Null when signed out. */
+  async idToken(): Promise<string | null> {
+    const session = await fetchAuthSession();
+    return session.tokens?.idToken?.toString() ?? null;
   },
   /** Returns null when nobody is signed in. */
   async currentUser(): Promise<SessionUser | null> {

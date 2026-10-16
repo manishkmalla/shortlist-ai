@@ -6,7 +6,7 @@ Paste a job description, pick one of your uploaded resumes, and get a match scor
 
 ## Status
 
-Early development. Phase 0 (scaffold and wireframes) is done, pending wireframe sign-off. See [PLAN.md](PLAN.md) for the roadmap and [CLAUDE.md](CLAUDE.md) for architecture and conventions. Wireframes: open `docs/wireframes/index.html` in a browser.
+Early development. Phase 0 (scaffold and wireframes) is done, pending wireframe sign-off. Documentation is in [docs/index.md](docs/index.md). See [PLAN.md](PLAN.md) for the roadmap and [CLAUDE.md](CLAUDE.md) for architecture and conventions. Wireframes: open `docs/wireframes/index.html` in a browser.
 
 ## Stack
 

@@ -1,28 +1,31 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { updateProfileRequestSchema, type UpdateProfileRequest } from '@shortlist-ai/shared';
+import { z } from 'zod';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button, Card, Dialog, DialogClose, DialogContent, DialogTrigger, Input, useToast } from '../../components/ui';
-import { useDeleteAccount, useProfile, useRenameProfile } from './hooks';
+import { useDeleteAccount, useProfile, useUpdateProfile } from './hooks';
 
 const CONFIRM_WORD = 'DELETE';
 
+const renameSchema = z.object({ name: z.string().trim().min(1, 'Enter your full name').max(100) });
+type RenameValues = z.infer<typeof renameSchema>;
+
 function RenameForm({ name }: { name: string }) {
   const { toast } = useToast();
-  const rename = useRenameProfile();
+  const update = useUpdateProfile();
   const {
     register,
     handleSubmit,
     reset,
     formState: { errors, isDirty },
-  } = useForm<UpdateProfileRequest>({
-    resolver: zodResolver(updateProfileRequestSchema),
+  } = useForm<RenameValues>({
+    resolver: zodResolver(renameSchema),
     defaultValues: { name },
   });
   useEffect(() => reset({ name }), [name, reset]);
 
   const onSubmit = handleSubmit((values) =>
-    rename.mutate(values, {
+    update.mutate(values, {
       onSuccess: () => toast({ title: 'Name updated', tone: 'good' }),
       onError: () => toast({ title: 'Could not update your name', description: 'Please try again.', tone: 'bad' }),
     }),
@@ -37,7 +40,7 @@ function RenameForm({ name }: { name: string }) {
         error={errors.name?.message}
         {...register('name')}
       />
-      <Button type="submit" loading={rename.isPending} disabled={!isDirty}>
+      <Button type="submit" loading={update.isPending} disabled={!isDirty}>
         Save name
       </Button>
     </form>

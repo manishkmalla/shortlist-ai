@@ -32,7 +32,10 @@ export function createFakeDb() {
         const k = command.input.Key as Item;
         const existing = items.get(id(k.pk, k.sk));
         if (!existing) throw conditionFailed();
-        const updated = { ...existing, name: command.input.ExpressionAttributeValues?.[':n'] };
+        const updated: Item = { ...existing };
+        for (const [ref, attr] of Object.entries(command.input.ExpressionAttributeNames ?? {})) {
+          updated[attr] = command.input.ExpressionAttributeValues?.[`:${ref.slice(1)}`];
+        }
         items.set(id(k.pk, k.sk), updated);
         return { Attributes: updated };
       }

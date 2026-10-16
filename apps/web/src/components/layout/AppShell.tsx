@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
+import { ApiKeyBanner } from '../../features/apiKey/ApiKeyBanner';
 import { cn } from '../../lib/cn';
 import { UserMenu } from './UserMenu';
 
@@ -49,6 +50,7 @@ export function AppShell({ userName, onSignOut }: { userName?: string; onSignOut
         </nav>
       </aside>
       <div className="flex min-w-0 flex-col">
+        <ApiKeyBanner />
         <header className="hidden justify-end px-8 py-4 md:flex">
           <UserMenu userName={userName} onSignOut={onSignOut} />
         </header>

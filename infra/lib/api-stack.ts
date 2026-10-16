@@ -15,6 +15,8 @@ export interface ApiStackProps extends StackProps {
   userPoolClient: IUserPoolClient;
   table: ITable;
   apiKeyKey: IKey;
+  /** Model used until a user picks one. Must be on the allow-list in packages/shared. */
+  defaultModelId: string;
   /** The CloudFront origin, e.g. https://d123.cloudfront.net. CORS is limited to it. */
   allowedOrigin: string;
 }
@@ -50,6 +52,7 @@ export class ApiStack extends Stack {
       TABLE_NAME: props.table.tableName,
       USER_POOL_ID: props.userPool.userPoolId,
       KEY_ID: props.apiKeyKey.keyArn,
+      DEFAULT_MODEL_ID: props.defaultModelId,
     };
     const route = (fnId: string, handlerFile: string, method: HttpMethod, path: string) => {
       const fn = apiFunction(this, fnId, handlerFile, env);

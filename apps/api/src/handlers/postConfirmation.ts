@@ -16,6 +16,8 @@ export const handler: PostConfirmationTriggerHandler = async (event) => {
     const svc = createProfileService({
       repo: createProfileRepo(createDb(), process.env.TABLE_NAME ?? ''),
       identity: { deleteUser: () => Promise.reject(new Error('not supported')) },
+      // The default is applied when the profile is read, not stored, so the value here is unused.
+      defaultModelId: 'claude-sonnet-5-5',
     });
     await svc.createProfile({ userId: sub, email, name: name ?? '' });
     logger.info('profile created', { userId: sub });

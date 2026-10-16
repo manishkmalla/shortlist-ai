@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { Profile } from '@shortlist-ai/shared';
+import type { StoredProfile } from '@shortlist-ai/shared';
 import { createFakeDb } from './fakeDb';
 import { createProfileRepo } from './profileRepo';
 
-const profile = (name: string): Profile => ({
+const profile = (name: string): StoredProfile => ({
   name,
   email: `${name.toLowerCase().replace(' ', '.')}@example.com`,
   onboardingStep: 'welcome',
@@ -28,9 +28,9 @@ describe('profileRepo', () => {
     expect((await repo.get('b'))?.name).toBe('Blake Sample');
     expect(await repo.get('c')).toBeNull();
 
-    await repo.updateName('a', 'Alex Renamed');
+    await repo.update('a', { name: 'Alex Renamed' });
     expect((await repo.get('b'))?.name).toBe('Blake Sample');
-    expect(await repo.updateName('c', 'Nobody')).toBeNull();
+    expect(await repo.update('c', { name: 'Nobody' })).toBeNull();
   });
 
   it('deleteAll removes only that user partition', async () => {
@@ -45,5 +45,22 @@ describe('profileRepo', () => {
     expect(await repo.get('a')).toBeNull();
     expect([...items.keys()].some((k) => k.startsWith('USER#a'))).toBe(false);
     expect((await repo.get('b'))?.name).toBe('Blake Sample');
+  });
+
+  it('updates only the fields given', async () => {
+    const repo = createProfileRepo(createFakeDb().db, 't');
+    await repo.createIfMissing('a', profile('Alex Example'));
+
+    await repo.update('a', { modelId: 'claude-haiku-5-5' });
+    expect(await repo.get('a')).toMatchObject({ name: 'Alex Example', modelId: 'claude-haiku-5-5' });
+
+    await repo.update('a', { name: 'Alex Renamed' });
+    expect(await repo.get('a')).toMatchObject({ name: 'Alex Renamed', modelId: 'claude-haiku-5-5' });
+  });
+
+  it('reads profiles stored before models existed', async () => {
+    const repo = createProfileRepo(createFakeDb().db, 't');
+    await repo.createIfMissing('a', profile('Alex Example'));
+    expect((await repo.get('a'))?.modelId).toBeUndefined();
   });
 });

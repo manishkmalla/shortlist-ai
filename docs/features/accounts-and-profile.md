@@ -12,6 +12,7 @@ Phase 1. Anyone can create an account, verify their email, sign in, rename thems
 | Forgot / reset password | `/forgot-password`, `/reset-password` | Code by email, then new password. |
 | Sign out | Account menu | Clears the session and the cached profile. |
 | Rename | `/settings` | Updates the name used to sign cover letters. |
+| Choose a model | `/settings` | Pick from the allow-list. See [Model selection](#model-selection). |
 | Delete account | `/settings` | Type `DELETE` to confirm. Removes the profile and the login, then signs out. |
 
 All app routes require a session (`RequireAuth`). Login and sign-up redirect signed-in users into the app (`PublicOnly`).
@@ -38,12 +39,27 @@ All routes need `Authorization: Bearer <ID token>` (not the access token: the pr
 | Method | Path | Body | Result |
 |---|---|---|---|
 | GET | `/me` | none | 200 profile (created if missing) |
-| PUT | `/me` | `{ "name": string }` (1 to 100 chars, no other fields) | 200 profile, 400 invalid, 404 no profile |
+| PUT | `/me` | `{ "name"?: string, "modelId"?: string }`. At least one. Name 1 to 100 chars; `modelId` must be on the allow-list. No other fields | 200 profile, 400 invalid, 404 no profile |
 | DELETE | `/me` | none | 204. Deletes all items under the user's partition, then the Cognito user |
 
-Profile shape (`packages/shared/src/profile.ts`): `name`, `email`, `onboardingStep` (`welcome | api-key | resume | done`), `onboardingCompletedAt` (ISO or null), `createdAt`.
+Profile shape (`packages/shared/src/profile.ts`): `name`, `email`, `onboardingStep` (`welcome | api-key | resume | done`), `onboardingCompletedAt` (ISO or null), `modelId` (always resolved), `createdAt`.
 
 Errors are `{ "error": { "code", "message" } }`. Missing or invalid tokens get `401` from the authorizer.
+
+## Model selection
+
+Users choose which Claude model runs their analyses. The allow-list is in `packages/shared/src/models.ts` (`MODEL_OPTIONS`), shared by the API (validation) and the web app (the picker):
+
+| Model | ID |
+|---|---|
+| Claude Opus 5.5 | `claude-opus-5-5` |
+| Claude Sonnet 5.5 | `claude-sonnet-5-5` |
+| Claude Haiku 5.5 | `claude-haiku-5-5` |
+
+- A user's choice is stored on their profile as `modelId`. Until they choose, the profile shows the **default**, which comes from configuration (`DEFAULT_MODEL_ID` on the API functions, set from the CDK context `defaultModelId`, currently `claude-sonnet-5-5`). Handlers never hold a model ID in code, and a default that is not on the allow-list stops the function at start-up.
+- Because the default is resolved when the profile is read, changing the default changes it for everyone who has not chosen, and no data migration is needed.
+- To change the default: `npx cdk deploy -c defaultModelId=<id>`. To change the list, edit `MODEL_OPTIONS` (and keep model IDs exact, with no date suffixes).
+- The picker only stores the choice. Generation uses it from Phase 3.
 
 ## Infrastructure
 

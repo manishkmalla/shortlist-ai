@@ -1,6 +1,6 @@
 # Anthropic API key (bring your own key)
 
-Phase 1b. Every user links their own Anthropic API key. The app never ships, shares or pays for a key, and never falls back to an owner key. This page covers the backend. The Settings form and onboarding wizard are documented when they land.
+Phase 1b. Every user links their own Anthropic API key. The app never ships, shares or pays for a key, and never falls back to an owner key. The backend and the Settings UI are covered here. The onboarding wizard is documented when it lands.
 
 ## What the user can do
 
@@ -65,3 +65,24 @@ KMS permissions are granted on each function's role rather than the key policy. 
 - **Error mapping:** 401, 403, 429, credit (402 and 400 billing text), 5xx and unknown failures, and no provider text in messages.
 - **Behaviour:** nothing is stored if live validation fails, `test` clears `validatedAt` only on a rejected key, a transient failure leaves it alone.
 - **CDK assertions:** only `TestApiKey` has `kms:Decrypt`, `SaveApiKey` can only generate data keys, read and remove functions have no KMS access, no wildcard IAM actions, the key rotates and is retained.
+
+## Web UI
+
+The form lives in `apps/web/src/features/apiKey/` and is one component, `ApiKeyForm`, so the onboarding wizard can reuse it.
+
+| State | What the user sees |
+|---|---|
+| No key | The collapsible "How to get your Anthropic API key" guide (the six steps from the Anthropic console), a masked input (`type=password`, `autocomplete=off`), Save, and a privacy note. A "Get key" link opens `console.anthropic.com/settings/keys` in a new tab with `rel="noopener noreferrer"` |
+| Saving | Button shows "Verifying..." while the live check runs. Server errors appear inline with the friendly message |
+| Key saved and verified | `Key verified: sk-ant-...XXXX`, the last-verified date, and Test connection, Replace and Remove |
+| Key saved but not verified | A "Needs attention" badge and the same actions |
+| Replace | Shows the input again, with Cancel |
+| Remove | A confirmation dialog first |
+
+Notes:
+
+- The saved key is only ever shown as `sk-ant-...` plus the last four characters, from the API. The full key is cleared from the form after saving and the save mutation is not kept in the query cache (`gcTime: 0`).
+- **Banner:** the app shell shows a persistent notice with a link to Settings when no key is saved or the saved key is not verified. It is hidden on the Settings page, where the fix lives. Generation itself is switched off in Phase 3 using the same status.
+- **Model picker:** Settings also lets the user pick the model used for their analyses. See [Accounts and profile](accounts-and-profile.md#model-selection).
+
+Web tests cover the masked input, the guide and link attributes, format rejection without an API call, the save flow (the full key never appears in the page), friendly errors for rejected keys and no credit, test, replace, remove with confirmation, and the banner states.

@@ -1,4 +1,4 @@
-import type { Profile } from '@shortlist-ai/shared';
+import type { ModelId, Profile, StoredProfile, UpdateProfileRequest } from '@shortlist-ai/shared';
 import type { ProfileRepo } from '../repo/profileRepo';
 
 /** Removes the Cognito account. Implemented in lib/identity.ts. */
@@ -12,10 +12,18 @@ export interface NewUserDetails {
   name: string;
 }
 
-export function createProfileService(deps: { repo: ProfileRepo; identity: IdentityAdmin; now?: () => Date }) {
+export function createProfileService(deps: {
+  repo: ProfileRepo;
+  identity: IdentityAdmin;
+  /** From config (DEFAULT_MODEL_ID). Used until the user picks a model. */
+  defaultModelId: ModelId;
+  now?: () => Date;
+}) {
   const now = deps.now ?? (() => new Date());
 
-  const newProfile = (d: NewUserDetails): Profile => ({
+  const resolve = (p: StoredProfile): Profile => ({ ...p, modelId: p.modelId ?? deps.defaultModelId });
+
+  const newProfile = (d: NewUserDetails): StoredProfile => ({
     name: (d.name || d.email).slice(0, 100),
     email: d.email,
     onboardingStep: 'welcome',
@@ -25,14 +33,20 @@ export function createProfileService(deps: { repo: ProfileRepo; identity: Identi
 
   return {
     /** Idempotent. Used by the post-confirmation trigger and as a self-heal in getOrCreate. */
-    createProfile: (d: NewUserDetails) => deps.repo.createIfMissing(d.userId, newProfile(d)),
+    async createProfile(d: NewUserDetails): Promise<Profile> {
+      return resolve(await deps.repo.createIfMissing(d.userId, newProfile(d)));
+    },
 
     /** The trigger can fail without blocking sign-up, so GET /me creates a missing profile. */
     async getOrCreate(d: NewUserDetails): Promise<Profile> {
-      return (await deps.repo.get(d.userId)) ?? deps.repo.createIfMissing(d.userId, newProfile(d));
+      const stored = (await deps.repo.get(d.userId)) ?? (await deps.repo.createIfMissing(d.userId, newProfile(d)));
+      return resolve(stored);
     },
 
-    updateName: (userId: string, name: string) => deps.repo.updateName(userId, name),
+    async update(userId: string, patch: UpdateProfileRequest): Promise<Profile | null> {
+      const stored = await deps.repo.update(userId, patch);
+      return stored ? resolve(stored) : null;
+    },
 
     /** Data first, then the login. If the second step fails the user can retry. */
     async deleteAccount(userId: string): Promise<void> {

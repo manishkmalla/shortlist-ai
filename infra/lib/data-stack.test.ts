@@ -16,3 +16,10 @@ it('table is retained, protected and has point-in-time recovery', () => {
   });
   t.hasResource('AWS::DynamoDB::Table', { DeletionPolicy: 'Retain', UpdateReplacePolicy: 'Retain' });
 });
+
+it('API key CMK rotates and is retained', () => {
+  const t = Template.fromStack(new DataStack(new App(), 'T', { envName: 'dev' }));
+  t.hasResourceProperties('AWS::KMS::Key', { EnableKeyRotation: true });
+  t.hasResource('AWS::KMS::Key', { DeletionPolicy: 'Retain', UpdateReplacePolicy: 'Retain' });
+  t.hasResourceProperties('AWS::KMS::Alias', { AliasName: 'alias/shortlist-ai-api-keys-dev' });
+});

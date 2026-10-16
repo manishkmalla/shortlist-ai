@@ -20,5 +20,6 @@ new ApiStack(app, `ShortlistAiApi-${envName}`, {
   userPool: auth.userPool,
   userPoolClient: auth.userPoolClient,
   table: data.table,
+  apiKeyKey: data.apiKeyKey,
   allowedOrigin: `https://${web.distribution.distributionDomainName}`,
 });

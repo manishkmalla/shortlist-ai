@@ -166,13 +166,13 @@ Each phase ends with something deployable and tested. Tick tasks as done.
 - Exit: anyone can create an account and see an empty app shell.
 
 ### Phase 1b - Onboarding wizard + BYOK key linking
-- [ ] `KMS` key, `PUT/GET/DELETE /settings/api-key` and test endpoint; format check + live validation call; envelope encryption; last-4 only returned.
+- [x] `KMS` key, `PUT/GET/DELETE /settings/api-key` and test endpoint; format check + live validation call; envelope encryption; last-4 only returned.
 - [ ] Settings page with masked input, Save / Test / Replace / Remove, status badge, model picker.
 - [ ] Inline guide "How to get your Anthropic API key" (steps in CLAUDE.md), "Get key" link, privacy note.
 - [ ] Onboarding wizard (Welcome -> API key -> first resume -> Done; the resume step is a placeholder until Phase 2 delivers the resume library) with the key guide inline in the key step; progress persisted on the profile (`onboardingStep`, `onboardingCompletedAt`); route guard redirects non-onboarded users to the wizard.
 - [ ] Settings reuses the same key form component for replace/remove; banner in app shell if the key later becomes invalid.
 - [ ] E2E test: sign up, verify, complete wizard with a mocked valid key, land on New Analysis; wizard cannot be finished with an invalid key.
-- [ ] Tests: key never appears in any response or log; user A cannot access user B's key; invalid/401/no-credit mapping to friendly errors.
+- [x] Tests: key never appears in any response or log; user A cannot access user B's key; invalid/401/no-credit mapping to friendly errors.
 - Exit: a new user signs up, is taken straight into onboarding, follows the guide, links a verified key, and reaches New Analysis.
 
 ### Phase 2 - Resume library + data layer

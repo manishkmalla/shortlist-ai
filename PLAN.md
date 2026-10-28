@@ -171,13 +171,13 @@ Each phase ends with something deployable and tested. Tick tasks as done.
 - [x] Inline guide "How to get your Anthropic API key" (steps in CLAUDE.md), "Get key" link, privacy note.
 - [x] Onboarding wizard (Welcome -> API key -> first resume -> Done; the resume step is a placeholder until Phase 2 delivers the resume library) with the key guide inline in the key step; progress persisted on the profile (`onboardingStep`, `onboardingCompletedAt`); route guard redirects non-onboarded users to the wizard.
 - [x] Settings reuses the same key form component for replace/remove; banner in app shell if the key later becomes invalid.
-- [ ] E2E test: sign up, verify, complete wizard with a mocked valid key, land on New Analysis; wizard cannot be finished with an invalid key.
+- [ ] E2E test: sign up, verify, complete wizard with a mocked valid key, land on New Analysis; wizard cannot be finished with an invalid key. (Deferred to Phase 6 with CI; the same flows are covered by unit tests and were tested by hand.)
 - [x] Tests: key never appears in any response or log; user A cannot access user B's key; invalid/401/no-credit mapping to friendly errors.
 - Exit: a new user signs up, is taken straight into onboarding, follows the guide, links a verified key, and reaches New Analysis.
 
 ### Phase 2 - Resume library + data layer
-- [ ] `DataStack`, repo layer, Zod schemas in `shared`.
-- [ ] Resume API: list/create/update/delete, paste-text create, presigned upload URL, original download URL.
+- [x] `DataStack`, repo layer, Zod schemas in `shared`.
+- [ ] Resume API: list/create/update/delete, paste-text create (done), duplicate and default handling (done); presigned upload URL and original download URL still to do.
 - [ ] Extraction Lambda (S3 event): PDF/DOCX/TXT to text, status field (`processing` -> `ready`/`failed`), size/type validation using magic bytes not just the extension, user-scoped S3 keys `uploads/<sub>/<resumeId>/<filename>`.
 - [ ] "My Resumes" UI: drag-and-drop multi-upload with progress, list with labels and default badge, text review/edit screen, rename/duplicate/delete, empty state and onboarding step.
 - [ ] Tests: extraction fixtures (text PDF, DOCX, scanned PDF, corrupt file, oversize), user isolation on S3 keys and DB, CDK assertions for bucket policy and IAM scoping.

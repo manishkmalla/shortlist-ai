@@ -26,7 +26,7 @@ const template = build();
 describe('ApiStack', () => {
   it('every route requires the JWT authorizer', () => {
     const routes = template.findResources('AWS::ApiGatewayV2::Route');
-    expect(Object.keys(routes)).toHaveLength(7);
+    expect(Object.keys(routes)).toHaveLength(13);
     for (const r of Object.values(routes)) {
       expect(r.Properties.AuthorizationType).toBe('JWT');
     }
@@ -67,8 +67,15 @@ describe('ApiStack', () => {
 describe('ApiStack API key routes', () => {
   const policiesFor = (name: RegExp) =>
     Object.entries(template.findResources('AWS::IAM::Policy')).filter(([id]) => name.test(id));
-  const actionsOf = (entries: [string, { Properties: { PolicyDocument: { Statement: { Action: string | string[] }[] } } }][]) =>
-    entries.flatMap(([, p]) => p.Properties.PolicyDocument.Statement.flatMap((s) => ([] as string[]).concat(s.Action)));
+  const actionsOf = (
+    entries: [
+      string,
+      { Properties: { PolicyDocument: { Statement: { Action: string | string[] }[] } } },
+    ][],
+  ) =>
+    entries.flatMap(([, p]) =>
+      p.Properties.PolicyDocument.Statement.flatMap((s) => ([] as string[]).concat(s.Action)),
+    );
 
   it('only the test function can decrypt', () => {
     const all = Object.entries(template.findResources('AWS::IAM::Policy'));
@@ -100,5 +107,68 @@ describe('ApiStack config', () => {
     template.hasResourceProperties('AWS::Lambda::Function', {
       Environment: { Variables: Match.objectLike({ DEFAULT_MODEL_ID: 'claude-sonnet-5-5' }) },
     });
+  });
+});
+
+describe('ApiStack resume routes', () => {
+  const actionsFor = (fn: RegExp) => {
+    const entries = Object.entries(template.findResources('AWS::IAM::Policy')).filter(([id]) =>
+      fn.test(id),
+    );
+    expect(entries.length).toBeGreaterThan(0);
+    return entries.flatMap(([, p]) =>
+      (p.Properties.PolicyDocument.Statement as { Action: string | string[] }[]).flatMap((s) =>
+        ([] as string[]).concat(s.Action),
+      ),
+    );
+  };
+
+  it('exposes the six resume routes, all behind the authorizer', () => {
+    const routes = Object.values(template.findResources('AWS::ApiGatewayV2::Route')).map(
+      (r) => r.Properties.RouteKey as string,
+    );
+    for (const key of [
+      'GET /resumes',
+      'POST /resumes',
+      'GET /resumes/{id}',
+      'PUT /resumes/{id}',
+      'DELETE /resumes/{id}',
+      'POST /resumes/{id}/duplicate',
+    ]) {
+      expect(routes).toContain(key);
+    }
+  });
+
+  it('listing and reading cannot write', () => {
+    expect(actionsFor(/ListResumes/)).toEqual(['dynamodb:Query']);
+    expect(actionsFor(/GetResume/)).toEqual(['dynamodb:GetItem']);
+  });
+
+  it('only DeleteResume can delete items among the resume functions', () => {
+    for (const fn of [
+      /ListResumes/,
+      /CreateResume/,
+      /GetResume/,
+      /UpdateResume/,
+      /DuplicateResume/,
+    ]) {
+      expect(actionsFor(fn)).not.toContain('dynamodb:DeleteItem');
+    }
+    expect(actionsFor(/DeleteResume/)).toContain('dynamodb:DeleteItem');
+  });
+
+  it('no resume function can scan the table or touch KMS or Cognito', () => {
+    for (const fn of [
+      /ListResumes/,
+      /CreateResume/,
+      /GetResume/,
+      /UpdateResume/,
+      /DeleteResume/,
+      /DuplicateResume/,
+    ]) {
+      const actions = actionsFor(fn);
+      expect(actions).not.toContain('dynamodb:Scan');
+      expect(actions.some((a) => a.startsWith('kms:') || a.startsWith('cognito-idp:'))).toBe(false);
+    }
   });
 });

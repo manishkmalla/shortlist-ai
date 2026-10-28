@@ -25,8 +25,8 @@ export function identityFrom(event: ApiEvent) {
 }
 
 /** Parses a JSON body with a Zod schema. Returns null if it is missing, too large or invalid. */
-export function parseBody<T>(event: ApiEvent, schema: z.ZodType<T>): T | null {
-  if (!event.body || event.body.length > 4_096) return null;
+export function parseBody<T>(event: ApiEvent, schema: z.ZodType<T>, maxBytes = 4_096): T | null {
+  if (!event.body || event.body.length > maxBytes) return null;
   try {
     const result = schema.safeParse(JSON.parse(event.isBase64Encoded ? atob(event.body) : event.body));
     return result.success ? result.data : null;

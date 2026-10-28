@@ -118,6 +118,40 @@ export class ApiStack extends Stack {
     props.table.grant(testKey, 'dynamodb:GetItem', 'dynamodb:PutItem');
     allowKms(testKey, 'kms:Decrypt');
 
+    // Resume library. One function per route; each gets only the table actions its code path uses.
+    props.table.grant(
+      route('ListResumes', 'resumes.ts', HttpMethod.GET, '/resumes'),
+      'dynamodb:Query',
+    );
+    props.table.grant(
+      route('CreateResume', 'resumes.ts', HttpMethod.POST, '/resumes'),
+      'dynamodb:Query',
+      'dynamodb:PutItem',
+    );
+    props.table.grant(
+      route('GetResume', 'resumes.ts', HttpMethod.GET, '/resumes/{id}'),
+      'dynamodb:GetItem',
+    );
+    props.table.grant(
+      route('UpdateResume', 'resumes.ts', HttpMethod.PUT, '/resumes/{id}'),
+      'dynamodb:GetItem',
+      'dynamodb:Query',
+      'dynamodb:UpdateItem',
+    );
+    props.table.grant(
+      route('DeleteResume', 'resumes.ts', HttpMethod.DELETE, '/resumes/{id}'),
+      'dynamodb:GetItem',
+      'dynamodb:Query',
+      'dynamodb:DeleteItem',
+      'dynamodb:UpdateItem',
+    );
+    props.table.grant(
+      route('DuplicateResume', 'resumes.ts', HttpMethod.POST, '/resumes/{id}/duplicate'),
+      'dynamodb:GetItem',
+      'dynamodb:Query',
+      'dynamodb:PutItem',
+    );
+
     new CfnOutput(this, 'ApiUrl', { value: this.api.apiEndpoint });
   }
 }

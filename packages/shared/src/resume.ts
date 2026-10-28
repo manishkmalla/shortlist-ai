@@ -1,0 +1,71 @@
+import { z } from 'zod';
+
+export const MAX_RESUMES = 10;
+export const MIN_RESUME_TEXT_CHARS = 20;
+/** Resumes are rejected above this rather than truncated. Also keeps each DynamoDB item well under 400 KB. */
+export const MAX_RESUME_TEXT_CHARS = 60_000;
+
+export const resumeStatusSchema = z.enum(['processing', 'ready', 'failed']);
+export type ResumeStatus = z.infer<typeof resumeStatusSchema>;
+
+export const resumeSourceSchema = z.enum(['paste', 'upload']);
+export type ResumeSource = z.infer<typeof resumeSourceSchema>;
+
+export const resumeLabelSchema = z
+  .string()
+  .trim()
+  .min(1, 'Give the resume a label')
+  .max(80, 'Use 80 characters or fewer');
+export const resumeNotesSchema = z.string().trim().max(500, 'Use 500 characters or fewer');
+
+export const resumeTextSchema = z
+  .string()
+  .refine((t) => t.trim().length >= MIN_RESUME_TEXT_CHARS, 'The resume text is too short')
+  .refine(
+    (t) => t.length <= MAX_RESUME_TEXT_CHARS,
+    `The resume is too long (the limit is ${MAX_RESUME_TEXT_CHARS.toLocaleString('en-US')} characters)`,
+  );
+
+/** Library listing: metadata only, never the text. */
+export const resumeSummarySchema = z.object({
+  id: z.string().uuid(),
+  label: z.string(),
+  notes: z.string(),
+  status: resumeStatusSchema,
+  source: resumeSourceSchema,
+  isDefault: z.boolean(),
+  /** False until the user has seen and accepted the text (always true for pasted resumes). */
+  reviewed: z.boolean(),
+  textLength: z.number().int().nonnegative(),
+  parentResumeId: z.string().uuid().optional(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type ResumeSummary = z.infer<typeof resumeSummarySchema>;
+
+export const resumeSchema = resumeSummarySchema.extend({ text: z.string() });
+export type Resume = z.infer<typeof resumeSchema>;
+
+export const resumeListSchema = z.object({ resumes: z.array(resumeSummarySchema) });
+export type ResumeList = z.infer<typeof resumeListSchema>;
+
+export const createResumeRequestSchema = z
+  .object({ label: resumeLabelSchema, text: resumeTextSchema, notes: resumeNotesSchema.optional() })
+  .strict();
+export type CreateResumeRequest = z.infer<typeof createResumeRequestSchema>;
+
+export const updateResumeRequestSchema = z
+  .object({
+    label: resumeLabelSchema.optional(),
+    notes: resumeNotesSchema.optional(),
+    text: resumeTextSchema.optional(),
+    /** Only `true` is accepted: the default is changed by choosing a new one. */
+    isDefault: z.literal(true).optional(),
+    /** The user confirms they have reviewed the extracted text. */
+    reviewed: z.literal(true).optional(),
+  })
+  .strict()
+  .refine((v) => Object.values(v).some((x) => x !== undefined), {
+    message: 'Provide a field to update',
+  });
+export type UpdateResumeRequest = z.infer<typeof updateResumeRequestSchema>;

@@ -1,4 +1,12 @@
-import { BatchWriteCommand, DeleteCommand, GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import {
+  BatchWriteCommand,
+  DeleteCommand,
+  GetCommand,
+  PutCommand,
+  QueryCommand,
+  TransactWriteCommand,
+  UpdateCommand,
+} from '@aws-sdk/lib-dynamodb';
 import type { Db } from './db';
 
 type Item = Record<string, unknown> & { pk: string; sk: string };
@@ -7,7 +15,10 @@ type Item = Record<string, unknown> & { pk: string; sk: string };
 export function createFakeDb() {
   const items = new Map<string, Item>();
   const id = (pk: unknown, sk: unknown) => `${String(pk)}|${String(sk)}`;
-  const conditionFailed = () => Object.assign(new Error('conditional check failed'), { name: 'ConditionalCheckFailedException' });
+  const conditionFailed = () =>
+    Object.assign(new Error('conditional check failed'), {
+      name: 'ConditionalCheckFailedException',
+    });
 
   const db = {
     async send(command: unknown) {
@@ -17,7 +28,10 @@ export function createFakeDb() {
       }
       if (command instanceof PutCommand) {
         const item = command.input.Item as Item;
-        if (command.input.ConditionExpression === 'attribute_not_exists(pk)' && items.has(id(item.pk, item.sk))) {
+        if (
+          command.input.ConditionExpression === 'attribute_not_exists(pk)' &&
+          items.has(id(item.pk, item.sk))
+        ) {
           throw conditionFailed();
         }
         items.set(id(item.pk, item.sk), { ...item });
@@ -41,7 +55,33 @@ export function createFakeDb() {
       }
       if (command instanceof QueryCommand) {
         const pk = command.input.ExpressionAttributeValues?.[':pk'];
-        return { Items: [...items.values()].filter((i) => i.pk === pk) };
+        const prefix = command.input.ExpressionAttributeValues?.[':prefix'] as string | undefined;
+        return {
+          Items: [...items.values()].filter(
+            (i) => i.pk === pk && (!prefix || i.sk.startsWith(prefix)),
+          ),
+        };
+      }
+      if (command instanceof TransactWriteCommand) {
+        // All-or-nothing: check every condition before applying any update.
+        const updates = (command.input.TransactItems ?? []).map((t) => t.Update!);
+        for (const u of updates) {
+          const k = u.Key as Item;
+          if (!items.has(id(k.pk, k.sk))) {
+            throw Object.assign(new Error('transaction cancelled'), {
+              name: 'TransactionCanceledException',
+            });
+          }
+        }
+        for (const u of updates) {
+          const k = u.Key as Item;
+          const next: Item = { ...items.get(id(k.pk, k.sk))! };
+          for (const [ref, attr] of Object.entries(u.ExpressionAttributeNames ?? {})) {
+            next[attr] = u.ExpressionAttributeValues?.[`:${ref.slice(1)}`];
+          }
+          items.set(id(k.pk, k.sk), next);
+        }
+        return {};
       }
       if (command instanceof BatchWriteCommand) {
         for (const reqs of Object.values(command.input.RequestItems ?? {})) {

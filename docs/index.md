@@ -7,6 +7,7 @@ Docs are written alongside each feature and ship in the same PR.
 | [Accounts and profile](features/accounts-and-profile.md) | Sign-up, sign-in, route guards, the `/me` API, account settings and deletion |
 | [Anthropic API key](features/anthropic-api-key.md) | Bring-your-own-key endpoints, encryption, error mapping and IAM scoping |
 | [Onboarding wizard](features/onboarding.md) | First-run steps, the server-enforced rules, route guards and the migration for older accounts |
+| [Resume library](features/resumes.md) | Per-user resumes: storage, API, limits, default handling and IAM scoping |
 | [Deployment](deployment.md) | AWS profile, bootstrap, `cdk diff`/`deploy`, publishing the web bundle |
 
 Other references: [PLAN.md](../PLAN.md) (roadmap), [CLAUDE.md](../CLAUDE.md) (architecture and conventions), `docs/wireframes/index.html` (screen wireframes).

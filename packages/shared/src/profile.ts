@@ -17,11 +17,20 @@ export const profileSchema = z.object({
 export type Profile = z.infer<typeof profileSchema>;
 
 /** What is stored. `modelId` is absent until the user picks one. */
-export const storedProfileSchema = profileSchema.extend({ modelId: modelIdSchema.optional() });
+export const storedProfileSchema = profileSchema.extend({
+  modelId: modelIdSchema.optional(),
+  /** Set on profiles created after onboarding existed. Older profiles lack it and are migrated on read. */
+  onboardingVersion: z.number().int().optional(),
+});
 export type StoredProfile = z.infer<typeof storedProfileSchema>;
 
 export const updateProfileRequestSchema = z
-  .object({ name: z.string().trim().min(1).max(100).optional(), modelId: modelIdSchema.optional() })
+  .object({
+    name: z.string().trim().min(1).max(100).optional(),
+    modelId: modelIdSchema.optional(),
+    /** Completion is set by the server when this becomes `done`; clients cannot send a timestamp. */
+    onboardingStep: onboardingStepSchema.optional(),
+  })
   .strict()
-  .refine((v) => v.name !== undefined || v.modelId !== undefined, { message: 'Provide a name or a model' });
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Provide a field to update' });
 export type UpdateProfileRequest = z.infer<typeof updateProfileRequestSchema>;

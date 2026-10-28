@@ -5,11 +5,16 @@ import { errorResponse, identityFrom, json, parseBody, type ApiEvent } from '../
 import { logger } from '../lib/logger';
 import { createDb } from '../repo/db';
 import { createProfileRepo } from '../repo/profileRepo';
-import { createProfileService, type ProfileService } from '../services/profileService';
+import { createSecretRepo } from '../repo/secretRepo';
+import { createProfileService, OnboardingError, type ProfileService } from '../services/profileService';
 
 function service(): ProfileService {
+  const db = createDb();
+  const table = process.env.TABLE_NAME ?? '';
+  const secrets = createSecretRepo(db, table);
   return createProfileService({
-    repo: createProfileRepo(createDb(), process.env.TABLE_NAME ?? ''),
+    repo: createProfileRepo(db, table),
+    hasVerifiedKey: async (userId) => Boolean((await secrets.get(userId))?.validatedAt),
     identity: createIdentityAdmin(process.env.USER_POOL_ID ?? ''),
     // Config, not code. Fails fast if DEFAULT_MODEL_ID is missing or not on the allow-list.
     defaultModelId: modelIdSchema.parse(process.env.DEFAULT_MODEL_ID),
@@ -25,10 +30,15 @@ export async function route(event: ApiEvent, svc: ProfileService) {
     case 'PUT': {
       const body = parseBody(event, updateProfileRequestSchema);
       if (!body) {
-        return errorResponse(400, 'invalid_request', 'Provide a name (1 to 100 characters) or a supported model.');
+        return errorResponse(400, 'invalid_request', 'Provide a name (1 to 100 characters), a supported model or an onboarding step.');
       }
-      const updated = await svc.update(me.userId, body);
-      return updated ? json(200, updated) : errorResponse(404, 'not_found', 'Profile not found.');
+      try {
+        const updated = await svc.update(me.userId, body);
+        return updated ? json(200, updated) : errorResponse(404, 'not_found', 'Profile not found.');
+      } catch (e) {
+        if (e instanceof OnboardingError) return errorResponse(409, e.code, e.message);
+        throw e;
+      }
     }
     case 'DELETE':
       await svc.deleteAccount(me.userId);

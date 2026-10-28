@@ -5,4 +5,6 @@ interface ImportMetaEnv {
   readonly VITE_COGNITO_USER_POOL_ID: string;
   readonly VITE_COGNITO_CLIENT_ID: string;
   readonly VITE_API_URL: string;
+  /** Dev only: where the Vite dev server forwards /api requests. */
+  readonly VITE_API_PROXY_TARGET?: string;
 }

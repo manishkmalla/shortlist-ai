@@ -9,12 +9,18 @@ import { storedProfileSchema, type StoredProfile, type UpdateProfileRequest } fr
 import type { Db } from './db';
 import { PROFILE_SK, userPk } from './keys';
 
+/** Fields the repo can change. Completion and version are set by the service, never by clients. */
+export type ProfilePatch = Pick<UpdateProfileRequest, 'name' | 'modelId' | 'onboardingStep'> & {
+  onboardingCompletedAt?: string;
+  onboardingVersion?: number;
+};
+
 export interface ProfileRepo {
   get(userId: string): Promise<StoredProfile | null>;
   /** Creates the profile only if none exists. Returns the stored profile either way. */
   createIfMissing(userId: string, profile: StoredProfile): Promise<StoredProfile>;
   /** Updates the given fields. Returns null if the profile does not exist. */
-  update(userId: string, patch: Pick<UpdateProfileRequest, 'name' | 'modelId'>): Promise<StoredProfile | null>;
+  update(userId: string, patch: ProfilePatch): Promise<StoredProfile | null>;
   /** Removes every item under the user's partition. */
   deleteAll(userId: string): Promise<void>;
 }

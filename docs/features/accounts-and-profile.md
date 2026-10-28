@@ -10,6 +10,7 @@ Phase 1. Anyone can create an account, verify their email, sign in, rename thems
 | Verify email | `/verify` | Resend available. Reached after sign-up, or after signing in with an unverified account. |
 | Sign in | `/login` | Wrong password and unknown email show the same message. Returns you to the page you asked for. |
 | Forgot / reset password | `/forgot-password`, `/reset-password` | Code by email, then new password. |
+| Onboarding | `/onboarding` | New users are sent here until they finish. See [Onboarding wizard](onboarding.md). |
 | Sign out | Account menu | Clears the session and the cached profile. |
 | Rename | `/settings` | Updates the name used to sign cover letters. |
 | Choose a model | `/settings` | Pick from the allow-list. See [Model selection](#model-selection). |
@@ -39,7 +40,7 @@ All routes need `Authorization: Bearer <ID token>` (not the access token: the pr
 | Method | Path | Body | Result |
 |---|---|---|---|
 | GET | `/me` | none | 200 profile (created if missing) |
-| PUT | `/me` | `{ "name"?: string, "modelId"?: string }`. At least one. Name 1 to 100 chars; `modelId` must be on the allow-list. No other fields | 200 profile, 400 invalid, 404 no profile |
+| PUT | `/me` | `{ "name"?, "modelId"?, "onboardingStep"? }`. At least one. Name 1 to 100 chars; `modelId` must be on the allow-list; `onboardingStep` follows the [onboarding rules](onboarding.md). No other fields | 200 profile, 400 invalid, 404 no profile, 409 onboarding rule |
 | DELETE | `/me` | none | 204. Deletes all items under the user's partition, then the Cognito user |
 
 Profile shape (`packages/shared/src/profile.ts`): `name`, `email`, `onboardingStep` (`welcome | api-key | resume | done`), `onboardingCompletedAt` (ISO or null), `modelId` (always resolved), `createdAt`.

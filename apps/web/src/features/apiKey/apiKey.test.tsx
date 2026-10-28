@@ -213,8 +213,8 @@ describe('ModelPicker', () => {
   const profile = {
     name: 'Alex Example',
     email: 'alex@example.com',
-    onboardingStep: 'welcome' as const,
-    onboardingCompletedAt: null,
+    onboardingStep: 'done' as const,
+    onboardingCompletedAt: '2026-01-01T00:00:00.000Z',
     modelId: 'claude-sonnet-5-5' as const,
     createdAt: '2026-01-01T00:00:00.000Z',
   };

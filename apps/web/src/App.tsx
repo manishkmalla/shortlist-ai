@@ -9,6 +9,8 @@ import { ResetPasswordPage } from './features/auth/ResetPasswordPage';
 import { SignUpPage } from './features/auth/SignUpPage';
 import { useAuth } from './features/auth/AuthProvider';
 import { VerifyEmailPage } from './features/auth/VerifyEmailPage';
+import { OnboardingPage } from './features/onboarding/OnboardingPage';
+import { RequireOnboarded } from './features/onboarding/OnboardingGuard';
 import { useProfile } from './features/profile/hooks';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -38,12 +40,39 @@ export function App() {
         <Route path="reset-password" element={<ResetPasswordPage />} />
 
         <Route element={<RequireAuth />}>
-          <Route element={<ShellRoute />}>
-            <Route index element={<PlaceholderPage title="New Analysis" description="Paste a job description to get started. Coming in Phase 3." />} />
-            <Route path="applications" element={<PlaceholderPage title="Applications" description="Your analyses will appear here." />} />
-            <Route path="resumes" element={<PlaceholderPage title="My Resumes" description="Upload and manage your resumes. Coming in Phase 2." />} />
-            <Route path="settings" element={<SettingsPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="onboarding" element={<OnboardingPage />} />
+          <Route element={<RequireOnboarded />}>
+            <Route element={<ShellRoute />}>
+              <Route
+                index
+                element={
+                  <PlaceholderPage
+                    title="New Analysis"
+                    description="Paste a job description to get started. Coming in Phase 3."
+                  />
+                }
+              />
+              <Route
+                path="applications"
+                element={
+                  <PlaceholderPage
+                    title="Applications"
+                    description="Your analyses will appear here."
+                  />
+                }
+              />
+              <Route
+                path="resumes"
+                element={
+                  <PlaceholderPage
+                    title="My Resumes"
+                    description="Upload and manage your resumes. Coming in Phase 2."
+                  />
+                }
+              />
+              <Route path="settings" element={<SettingsPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
           </Route>
         </Route>
       </Routes>

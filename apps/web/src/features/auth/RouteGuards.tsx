@@ -1,7 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthProvider';
 
-function Loading() {
+export function Loading() {
   return (
     <div role="status" className="grid min-h-screen place-items-center text-sm text-slate-500">
       Loading...

@@ -34,7 +34,12 @@ export class ApiStack extends Stack {
       createDefaultStage: false,
       corsPreflight: {
         allowOrigins: [props.allowedOrigin],
-        allowMethods: [CorsHttpMethod.GET, CorsHttpMethod.PUT, CorsHttpMethod.DELETE, CorsHttpMethod.POST],
+        allowMethods: [
+          CorsHttpMethod.GET,
+          CorsHttpMethod.PUT,
+          CorsHttpMethod.DELETE,
+          CorsHttpMethod.POST,
+        ],
         allowHeaders: ['authorization', 'content-type'],
       },
       defaultAuthorizer: new HttpUserPoolAuthorizer('JwtAuthorizer', props.userPool, {
@@ -66,11 +71,22 @@ export class ApiStack extends Stack {
     // Granted on the role, not the key policy: the key lives in another stack and the default key
     // policy already delegates to IAM, so this avoids a circular stack dependency.
     const allowKms = (fn: ReturnType<typeof route>, ...actions: string[]) =>
-      fn.addToRolePolicy(new PolicyStatement({ effect: Effect.ALLOW, actions, resources: [props.apiKeyKey.keyArn] }));
+      fn.addToRolePolicy(
+        new PolicyStatement({ effect: Effect.ALLOW, actions, resources: [props.apiKeyKey.keyArn] }),
+      );
 
     // One function per verb so each gets only the permissions it needs.
-    props.table.grant(route('GetMe', 'profile.ts', HttpMethod.GET, '/me'), 'dynamodb:GetItem', 'dynamodb:PutItem');
-    props.table.grant(route('UpdateMe', 'profile.ts', HttpMethod.PUT, '/me'), 'dynamodb:UpdateItem');
+    props.table.grant(
+      route('GetMe', 'profile.ts', HttpMethod.GET, '/me'),
+      'dynamodb:GetItem',
+      'dynamodb:PutItem',
+      'dynamodb:UpdateItem',
+    );
+    props.table.grant(
+      route('UpdateMe', 'profile.ts', HttpMethod.PUT, '/me'),
+      'dynamodb:GetItem',
+      'dynamodb:UpdateItem',
+    );
 
     const deleteMe = route('DeleteMe', 'profile.ts', HttpMethod.DELETE, '/me');
     props.table.grant(deleteMe, 'dynamodb:Query', 'dynamodb:BatchWriteItem', 'dynamodb:DeleteItem');
@@ -84,13 +100,19 @@ export class ApiStack extends Stack {
 
     // Anthropic API key (BYOK). Only the test function can decrypt; saving only creates data keys.
     const keyPath = '/settings/api-key';
-    props.table.grant(route('GetApiKeyStatus', 'apiKey.ts', HttpMethod.GET, keyPath), 'dynamodb:GetItem');
+    props.table.grant(
+      route('GetApiKeyStatus', 'apiKey.ts', HttpMethod.GET, keyPath),
+      'dynamodb:GetItem',
+    );
 
     const saveKey = route('SaveApiKey', 'apiKey.ts', HttpMethod.PUT, keyPath);
     props.table.grant(saveKey, 'dynamodb:PutItem');
     allowKms(saveKey, 'kms:GenerateDataKey');
 
-    props.table.grant(route('RemoveApiKey', 'apiKey.ts', HttpMethod.DELETE, keyPath), 'dynamodb:DeleteItem');
+    props.table.grant(
+      route('RemoveApiKey', 'apiKey.ts', HttpMethod.DELETE, keyPath),
+      'dynamodb:DeleteItem',
+    );
 
     const testKey = route('TestApiKey', 'apiKey.ts', HttpMethod.POST, `${keyPath}/test`);
     props.table.grant(testKey, 'dynamodb:GetItem', 'dynamodb:PutItem');

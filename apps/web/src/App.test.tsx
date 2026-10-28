@@ -39,8 +39,8 @@ const keyApi = vi.mocked(apiKeyApi);
 const profile = {
   name: 'Alex Example',
   email: 'alex@example.com',
-  onboardingStep: 'welcome' as const,
-  onboardingCompletedAt: null,
+  onboardingStep: 'done' as const,
+  onboardingCompletedAt: '2026-01-01T00:00:00.000Z',
   modelId: 'claude-sonnet-5-5' as const,
   createdAt: '2026-01-01T00:00:00.000Z',
 };
@@ -59,7 +59,11 @@ beforeEach(() => {
   vi.resetAllMocks();
   client.currentUser.mockResolvedValue(null);
   api.get.mockResolvedValue(profile);
-  keyApi.status.mockResolvedValue({ configured: true, lastFour: 'wxyz', validatedAt: '2026-01-01T00:00:00.000Z' });
+  keyApi.status.mockResolvedValue({
+    configured: true,
+    lastFour: 'wxyz',
+    validatedAt: '2026-01-01T00:00:00.000Z',
+  });
 });
 
 afterEach(cleanup);
@@ -90,7 +94,10 @@ describe('route guards', () => {
     renderApp('/resumes');
     expect(await screen.findByRole('heading', { name: 'My Resumes' })).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'My Resumes' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'My Resumes' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
   });
 
   it('keeps signed-in users away from the login page', async () => {
@@ -203,7 +210,11 @@ describe('verification and reset', () => {
     await user.type(screen.getByLabelText('New password'), 'Correct-horse-2');
     await user.click(screen.getByRole('button', { name: 'Update password' }));
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
-    expect(client.completePasswordReset).toHaveBeenCalledWith('alex@example.com', '123456', 'Correct-horse-2');
+    expect(client.completePasswordReset).toHaveBeenCalledWith(
+      'alex@example.com',
+      '123456',
+      'Correct-horse-2',
+    );
   });
 });
 
@@ -222,7 +233,8 @@ describe('sign out', () => {
 });
 
 describe('account settings', () => {
-  const signedIn = () => client.currentUser.mockResolvedValue({ email: 'alex@example.com', name: 'Alex Example' });
+  const signedIn = () =>
+    client.currentUser.mockResolvedValue({ email: 'alex@example.com', name: 'Alex Example' });
 
   it('shows the profile name in the account menu', async () => {
     signedIn();
@@ -261,8 +273,8 @@ describe('account settings', () => {
     signedIn();
     api.get.mockRejectedValue(new Error('boom'));
     renderApp('/settings');
-    expect(await screen.findByRole('alert')).toHaveTextContent('Could not load your profile.');
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not load your account.');
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 
   it('deletes the account only after typing the confirmation word', async () => {
@@ -289,7 +301,9 @@ describe('account settings', () => {
     await user.click(await screen.findByRole('button', { name: 'Delete account' }));
     await user.type(await screen.findByLabelText('Type DELETE to confirm'), 'DELETE');
     await user.click(screen.getByRole('button', { name: 'Delete everything' }));
-    expect(await screen.findByText('Could not delete your account. Please try again.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Could not delete your account. Please try again.'),
+    ).toBeInTheDocument();
     expect(client.logout).not.toHaveBeenCalled();
   });
 });

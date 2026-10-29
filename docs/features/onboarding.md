@@ -8,7 +8,7 @@ Phase 1b. Right after sign-up and email verification, a new user is taken throug
 |---|---|---|
 | Welcome | `welcome` | What the app does, and that it runs on the user's own Anthropic key (pay-as-you-go, billed by Anthropic, no subscription). Button: Get started |
 | API key | `api-key` | The key guide is open, with the same `ApiKeyForm` used in Settings. Continue stays disabled until a verified key is saved. Back returns to Welcome |
-| Resume | `resume` | A placeholder until the resume library arrives in Phase 2. Back returns to the key step. Finish setup completes onboarding |
+| Resume | `resume` | A paste form (label and text), skippable. With no resumes the buttons are Back and **Skip for now**. After saving, the step shows "Saved: <label>" and "You have N resume(s)" with **Add another** (hidden at the 10 resume limit) and **Finish setup**. Returning to the step with resumes already saved shows that summary, not a blank form |
 | Done | `done` | Reached by Finish setup. The user lands on New Analysis with a confirmation toast |
 
 The wizard is at `/onboarding`. Users can sign out at any point and pick up at the same step next time.

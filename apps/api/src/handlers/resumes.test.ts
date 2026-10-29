@@ -73,7 +73,26 @@ describe('create and list', () => {
       isDefault: true,
       reviewed: true,
       textLength: TEXT.length,
+      wordCount: 13,
     });
+  });
+
+  it('counts words across lines and repeated whitespace, and updates the count on edit', async () => {
+    const { svc } = setup();
+    const { id } = await create(
+      svc,
+      'a',
+      'Counts',
+      'one  two\nthree\t four   five six seven eight nine ten',
+    );
+    expect((await listFor(svc, 'a'))[0].wordCount).toBe(10);
+    const edited = body(
+      await route(
+        event('PUT /resumes/{id}', 'a', { id, body: { text: `${TEXT} extra words here` } }),
+        svc,
+      ),
+    );
+    expect(edited.wordCount).toBe(16);
   });
 
   it('only the first resume is the default', async () => {

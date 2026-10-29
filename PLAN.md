@@ -179,7 +179,7 @@ Each phase ends with something deployable and tested. Tick tasks as done.
 - [x] `DataStack`, repo layer, Zod schemas in `shared`.
 - [ ] Resume API: list/create/update/delete, paste-text create (done), duplicate and default handling (done); presigned upload URL and original download URL still to do.
 - [ ] Extraction Lambda (S3 event): PDF/DOCX/TXT to text, status field (`processing` -> `ready`/`failed`), size/type validation using magic bytes not just the extension, user-scoped S3 keys `uploads/<sub>/<resumeId>/<filename>`.
-- [ ] "My Resumes" UI: drag-and-drop multi-upload with progress, list with labels and default badge, text review/edit screen, rename/duplicate/delete, empty state and onboarding step.
+- [ ] "My Resumes" UI: list with labels and default badge, text edit screen, rename/duplicate/delete, empty state and onboarding step (done, paste-only); drag-and-drop multi-upload with progress and the review-extracted-text step still to do.
 - [ ] Tests: extraction fixtures (text PDF, DOCX, scanned PDF, corrupt file, oversize), user isolation on S3 keys and DB, CDK assertions for bucket policy and IAM scoping.
 - Exit: a user uploads two or more resumes in the deployed app, corrects the extracted text, and sets a default.
 

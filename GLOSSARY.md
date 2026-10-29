@@ -12,6 +12,10 @@ _Avoid_: base profile, resume profile
 One of a user's own career documents, kept as editable text, plus the original file when it was uploaded.
 _Avoid_: CV, profile
 
+**Resume library**:
+The set of a user's resumes, at most ten. "My Resumes" is the screen that shows it.
+_Avoid_: collection, folder
+
 **Default resume**:
 The resume pre-selected when the user starts an Analysis. A user with any resumes has exactly one.
 _Avoid_: primary resume, main resume

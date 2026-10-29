@@ -12,7 +12,9 @@ import { VerifyEmailPage } from './features/auth/VerifyEmailPage';
 import { OnboardingPage } from './features/onboarding/OnboardingPage';
 import { RequireOnboarded } from './features/onboarding/OnboardingGuard';
 import { useProfile } from './features/profile/hooks';
+import { EditResumePage, NewResumePage } from './features/resumes/ResumeEditorPages';
 import { PlaceholderPage } from './pages/PlaceholderPage';
+import { ResumesPage } from './pages/ResumesPage';
 import { SettingsPage } from './pages/SettingsPage';
 
 function ShellRoute() {
@@ -61,15 +63,9 @@ export function App() {
                   />
                 }
               />
-              <Route
-                path="resumes"
-                element={
-                  <PlaceholderPage
-                    title="My Resumes"
-                    description="Upload and manage your resumes. Coming in Phase 2."
-                  />
-                }
-              />
+              <Route path="resumes" element={<ResumesPage />} />
+              <Route path="resumes/new" element={<NewResumePage />} />
+              <Route path="resumes/:id" element={<EditResumePage />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>

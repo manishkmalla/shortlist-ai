@@ -37,6 +37,7 @@ export const resumeSummarySchema = z.object({
   /** False until the user has seen and accepted the text (always true for pasted resumes). */
   reviewed: z.boolean(),
   textLength: z.number().int().nonnegative(),
+  wordCount: z.number().int().nonnegative(),
   parentResumeId: z.string().uuid().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),

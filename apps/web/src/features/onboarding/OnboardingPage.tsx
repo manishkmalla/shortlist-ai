@@ -1,4 +1,5 @@
-import type { OnboardingStep } from '@shortlist-ai/shared';
+import { MAX_RESUMES, type OnboardingStep } from '@shortlist-ai/shared';
+import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Button, Card, Stepper, useToast } from '../../components/ui';
 import { errorMessage } from '../../lib/api';
@@ -7,6 +8,8 @@ import { useApiKeyStatus } from '../apiKey/hooks';
 import { useAuth } from '../auth/AuthProvider';
 import { Loading } from '../auth/RouteGuards';
 import { useProfile, useUpdateProfile } from '../profile/hooks';
+import { useCreateResume, useResumes } from '../resumes/hooks';
+import { ResumeForm, type ResumeFormValues } from '../resumes/ResumeForm';
 
 const LABELS = ['Welcome', 'API key', 'Resume', 'Done'];
 const INDEX: Record<OnboardingStep, number> = { welcome: 0, 'api-key': 1, resume: 2, done: 3 };
@@ -75,20 +78,92 @@ function ResumeStep({
   onFinish: () => void;
   busy: boolean;
 }) {
+  const { toast } = useToast();
+  const resumes = useResumes();
+  const create = useCreateResume();
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savedLabel, setSavedLabel] = useState<string | null>(null);
+
+  const count = resumes.data?.length ?? 0;
+  const showForm = resumes.data && (count === 0 || adding);
+
+  const save = async (values: ResumeFormValues) => {
+    setError(null);
+    try {
+      const saved = await create.mutateAsync({ label: values.label, text: values.text });
+      setSavedLabel(saved.label);
+      toast({ title: 'Resume saved', tone: 'good' });
+      return true;
+    } catch (e) {
+      setError(errorMessage(e));
+      return false;
+    }
+  };
+
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Add your first resume</h1>
       <p className="text-sm text-slate-600 dark:text-slate-400">
-        Uploading and pasting resumes is coming soon. You will be able to add as many as you like
-        from My Resumes. For now you can finish setup.
+        Paste your resume as text. You can add more, and upload files, from My Resumes later. This
+        step is optional.
       </p>
+
+      {resumes.isPending && (
+        <p role="status" className="text-sm text-slate-500">
+          Loading...
+        </p>
+      )}
+      {resumes.isError && (
+        <p role="alert" className="text-sm text-bad dark:text-red-400">
+          Could not load your resumes. You can skip this step and add one later.
+        </p>
+      )}
+
+      {showForm && (
+        <ResumeForm
+          showNotes={false}
+          submitLabel="Save resume"
+          error={error}
+          onSubmit={save}
+          onSaved={() => setAdding(false)}
+          actions={
+            count > 0 ? (
+              <Button variant="secondary" onClick={() => setAdding(false)}>
+                Cancel
+              </Button>
+            ) : undefined
+          }
+        />
+      )}
+
+      {resumes.data && count > 0 && !adding && (
+        <div className="space-y-3 rounded-control border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+          {savedLabel && <p className="text-sm font-medium">Saved: {savedLabel}</p>}
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            You have {count} {count === 1 ? 'resume' : 'resumes'}.
+          </p>
+          {count < MAX_RESUMES && (
+            <Button variant="ghost" size="sm" onClick={() => setAdding(true)}>
+              Add another
+            </Button>
+          )}
+        </div>
+      )}
+
       <div className="flex gap-2">
         <Button variant="secondary" onClick={onBack} disabled={busy}>
           Back
         </Button>
-        <Button onClick={onFinish} loading={busy}>
-          Finish setup
-        </Button>
+        {count > 0 && !adding ? (
+          <Button onClick={onFinish} loading={busy}>
+            Finish setup
+          </Button>
+        ) : (
+          <Button variant="secondary" onClick={onFinish} loading={busy}>
+            Skip for now
+          </Button>
+        )}
       </div>
     </div>
   );

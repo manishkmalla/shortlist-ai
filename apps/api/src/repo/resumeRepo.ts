@@ -6,12 +6,21 @@ import {
   TransactWriteCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { resumeSourceSchema, resumeStatusSchema } from '@shortlist-ai/shared';
+import { resumeFailureSchema, resumeSourceSchema, resumeStatusSchema } from '@shortlist-ai/shared';
 import { z } from 'zod';
 import type { Db } from './db';
 import { userPk } from './keys';
 
 const RESUME_PREFIX = 'RESUME#';
+
+/** The file a Resume was uploaded as. The storage key is derived from the user and Resume ids, never stored. */
+export const storedOriginalSchema = z.object({
+  /** Sanitised: safe to use in a key and in a download header. */
+  filename: z.string(),
+  size: z.number().int().nonnegative(),
+  contentType: z.string(),
+});
+export type StoredOriginal = z.infer<typeof storedOriginalSchema>;
 
 /** What is stored. `reviewedAt` is null until the user accepts the text. */
 export const storedResumeSchema = z.object({
@@ -24,6 +33,10 @@ export const storedResumeSchema = z.object({
   isDefault: z.boolean(),
   reviewedAt: z.string().datetime().nullable(),
   parentResumeId: z.string().uuid().optional(),
+  /** Present for uploads. */
+  original: storedOriginalSchema.optional(),
+  /** Present when an upload could not be read. */
+  failure: resumeFailureSchema.optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

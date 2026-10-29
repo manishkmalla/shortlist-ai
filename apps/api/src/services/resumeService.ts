@@ -10,7 +10,7 @@ import type { ResumePatch, ResumeRepo, StoredResume } from '../repo/resumeRepo';
 /** Why a resume request was refused. The handler maps these to HTTP statuses. */
 export class ResumeError extends Error {
   constructor(
-    public readonly code: 'limit_reached' | 'not_found',
+    public readonly code: 'limit_reached' | 'not_found' | 'not_ready',
     message: string,
   ) {
     super(message);
@@ -30,6 +30,8 @@ const toSummary = (r: StoredResume): ResumeSummary => ({
   reviewed: r.reviewedAt !== null,
   textLength: r.text.length,
   wordCount: countWords(r.text),
+  hasOriginal: r.original !== undefined,
+  failureReason: r.failure ?? null,
   ...(r.parentResumeId ? { parentResumeId: r.parentResumeId } : {}),
   createdAt: r.createdAt,
   updatedAt: r.updatedAt,
@@ -93,6 +95,9 @@ export function createResumeService(deps: {
       await ensureRoom(userId);
       const source = await deps.repo.get(userId, id);
       if (!source) throw new ResumeError('not_found', 'Resume not found.');
+      if (source.status !== 'ready') {
+        throw new ResumeError('not_ready', 'This resume is not ready yet, so it cannot be duplicated.');
+      }
       const stamp = now();
       const copy: StoredResume = {
         ...source,
@@ -102,13 +107,24 @@ export function createResumeService(deps: {
         createdAt: stamp,
         updatedAt: stamp,
       };
+      // The Original belongs to the source: a copy is text only.
       delete copy.parentResumeId;
+      delete copy.original;
+      delete copy.failure;
       await deps.repo.create(userId, copy);
       return toResume(copy);
     },
 
     /** Editing the text, or confirming it, marks the resume as reviewed. */
     async update(userId: string, id: string, input: UpdateResumeRequest): Promise<Resume | null> {
+      // Only text the app has actually read can be confirmed. Checked first, so a refusal changes nothing.
+      if (input.reviewed) {
+        const current = await deps.repo.get(userId, id);
+        if (!current) return null;
+        if (current.status !== 'ready') {
+          throw new ResumeError('not_ready', 'This resume is not ready yet, so its text cannot be confirmed.');
+        }
+      }
       const stamp = now();
       const patch: ResumePatch = {
         label: input.label,

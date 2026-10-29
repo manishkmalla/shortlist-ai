@@ -16,6 +16,10 @@ _Avoid_: CV, profile
 The set of a user's resumes, at most ten. "My Resumes" is the screen that shows it.
 _Avoid_: collection, folder
 
+**Original**:
+The file a Resume was uploaded as. It is kept so the user can download it, and is never read by the AI: the Resume's text is.
+_Avoid_: source file, attachment
+
 **Default resume**:
 The resume pre-selected when the user starts an Analysis. A user with any resumes has exactly one.
 _Avoid_: primary resume, main resume

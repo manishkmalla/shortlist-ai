@@ -255,6 +255,8 @@ const summary = (id: string, label: string, isDefault = false) => ({
   reviewed: true,
   textLength: 300,
   wordCount: 50,
+  hasOriginal: false,
+  failureReason: null,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 });

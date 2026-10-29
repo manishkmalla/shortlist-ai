@@ -10,6 +10,8 @@ Docs are written alongside each feature and ship in the same PR.
 | [Resume library](features/resumes.md) | Per-user resumes: storage, API, limits, default handling and IAM scoping |
 | [Deployment](deployment.md) | AWS profile, bootstrap, `cdk diff`/`deploy`, publishing the web bundle |
 
+Vocabulary and decisions: [GLOSSARY.md](../GLOSSARY.md) (the project's terms; use them in code, docs and UI) and [docs/adr/](adr/) (hard-to-reverse decisions and why).
+
 Other references: [PLAN.md](../PLAN.md) (roadmap), [CLAUDE.md](../CLAUDE.md) (architecture and conventions), `docs/wireframes/index.html` (screen wireframes).
 
 ## Adding docs for a new feature

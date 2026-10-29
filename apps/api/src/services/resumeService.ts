@@ -10,7 +10,7 @@ import type { ResumePatch, ResumeRepo, StoredResume } from '../repo/resumeRepo';
 /** Why a resume request was refused. The handler maps these to HTTP statuses. */
 export class ResumeError extends Error {
   constructor(
-    public readonly code: 'limit_reached' | 'not_found',
+    public readonly code: 'limit_reached' | 'not_found' | 'not_ready',
     message: string,
   ) {
     super(message);
@@ -30,6 +30,8 @@ const toSummary = (r: StoredResume): ResumeSummary => ({
   reviewed: r.reviewedAt !== null,
   textLength: r.text.length,
   wordCount: countWords(r.text),
+  hasOriginal: r.original !== undefined,
+  failureReason: r.failure ?? null,
   ...(r.parentResumeId ? { parentResumeId: r.parentResumeId } : {}),
   createdAt: r.createdAt,
   updatedAt: r.updatedAt,
@@ -38,6 +40,13 @@ const toSummary = (r: StoredResume): ResumeSummary => ({
 const toResume = (r: StoredResume): Resume => ({ ...toSummary(r), text: r.text });
 
 const newestFirst = (a: StoredResume, b: StoredResume) => b.updatedAt.localeCompare(a.updatedAt);
+
+/** Only a Resume whose text the app has actually read can be reviewed, edited as text, or copied. */
+const assertReady = (resume: StoredResume, action: string) => {
+  if (resume.status !== 'ready') {
+    throw new ResumeError('not_ready', `This resume is not ready yet, so it cannot be ${action}.`);
+  }
+};
 
 const limitError = () =>
   new ResumeError(
@@ -93,6 +102,7 @@ export function createResumeService(deps: {
       await ensureRoom(userId);
       const source = await deps.repo.get(userId, id);
       if (!source) throw new ResumeError('not_found', 'Resume not found.');
+      assertReady(source, 'duplicated');
       const stamp = now();
       const copy: StoredResume = {
         ...source,
@@ -102,13 +112,22 @@ export function createResumeService(deps: {
         createdAt: stamp,
         updatedAt: stamp,
       };
+      // The Original belongs to the source: a copy is text only.
       delete copy.parentResumeId;
+      delete copy.original;
+      delete copy.failure;
       await deps.repo.create(userId, copy);
       return toResume(copy);
     },
 
     /** Editing the text, or confirming it, marks the resume as reviewed. */
     async update(userId: string, id: string, input: UpdateResumeRequest): Promise<Resume | null> {
+      // Editing the text counts as reviewing it, so both need a ready Resume. Checked first, so a refusal changes nothing.
+      if (input.reviewed || input.text !== undefined) {
+        const current = await deps.repo.get(userId, id);
+        if (!current) return null;
+        assertReady(current, 'marked as reviewed or have its text edited');
+      }
       const stamp = now();
       const patch: ResumePatch = {
         label: input.label,

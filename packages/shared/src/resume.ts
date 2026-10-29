@@ -26,6 +26,22 @@ export const resumeTextSchema = z
     `The resume is too long (the limit is ${MAX_RESUME_TEXT_CHARS.toLocaleString('en-US')} characters)`,
   );
 
+/** Why an uploaded file could not be turned into text. The message is safe to show to the user. */
+export const resumeFailureCodeSchema = z.enum([
+  'no_readable_text',
+  'password_protected',
+  'corrupt',
+  'wrong_type',
+  'file_too_large',
+  'text_too_long',
+  'unsupported_encoding',
+  'upload_incomplete',
+]);
+export type ResumeFailureCode = z.infer<typeof resumeFailureCodeSchema>;
+
+export const resumeFailureSchema = z.object({ code: resumeFailureCodeSchema, message: z.string() });
+export type ResumeFailure = z.infer<typeof resumeFailureSchema>;
+
 /** Library listing: metadata only, never the text. */
 export const resumeSummarySchema = z.object({
   id: z.string().uuid(),
@@ -38,6 +54,10 @@ export const resumeSummarySchema = z.object({
   reviewed: z.boolean(),
   textLength: z.number().int().nonnegative(),
   wordCount: z.number().int().nonnegative(),
+  /** True when the user uploaded a file, which is kept for download (the Original). Never exposes where it is stored. */
+  hasOriginal: z.boolean(),
+  /** Set when an upload could not be read. */
+  failureReason: resumeFailureSchema.nullable(),
   parentResumeId: z.string().uuid().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),

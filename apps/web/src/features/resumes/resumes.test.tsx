@@ -51,6 +51,8 @@ const summary = (n: number, over: Partial<ResumeSummary> = {}): ResumeSummary =>
   reviewed: true,
   textLength: 600,
   wordCount: 1400,
+  hasOriginal: false,
+  failureReason: null,
   createdAt: '2026-10-03T00:00:00.000Z',
   updatedAt: '2026-10-03T00:00:00.000Z',
   ...over,

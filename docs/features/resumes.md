@@ -14,6 +14,8 @@ Phase 2. Each user keeps up to 10 resumes of their own, with no built-in or samp
 | `wordCount` | Computed by the server on each read, for the list. The text itself is never in the list |
 | `isDefault` | Exactly one resume is the default, once the user has any |
 | `reviewed` | False until the user has seen and accepted the text. Always true for pasted resumes. Editing the text, or confirming it, sets it |
+| `hasOriginal` | True when the Resume was uploaded: its **Original** is kept for download. The listing says only whether one exists, never its name or where it is stored |
+| `failureReason` | For an upload that could not be read: a short code and a message the user can act on, or `null`. Codes: `no_readable_text`, `password_protected`, `corrupt`, `wrong_type`, `file_too_large`, `text_too_long`, `unsupported_encoding`, `upload_incomplete` |
 | `parentResumeId` | Reserved for tailored versions saved back to the library |
 
 Text over the limit is **rejected with a message**, never truncated. The 60,000 character cap (about 15,000 tokens, many times the length of a normal resume) also keeps each item well under DynamoDB's 400 KB limit, even with multi-byte characters.
@@ -49,6 +51,16 @@ How it behaves:
 - **Unsaved changes:** leaving the editor by any route (sidebar, Cancel, browser back) asks "Discard your changes?" while the form has edits, and closing the tab triggers the browser prompt. After a successful save it does not ask. This needs a data router, so the app mounts under `createBrowserRouter` with a single splat route that holds the existing `<Routes>`.
 - **Delete** asks first. If the resume is the default, the dialog names the resume that will become the default (the most recently updated remaining one, matching the server rule).
 - **Onboarding:** the wizard's resume step uses the same form (without notes). See [Onboarding wizard](onboarding.md).
+
+## Uploaded Resumes (groundwork)
+
+The upload path itself arrives ticket by ticket (see the upload spec). The model is ready for it:
+
+- A stored Resume can carry its Original's sanitised file name, size and type, and a failure reason. Storage keys are never stored: they are built from the user and Resume ids.
+- **Marking a Resume reviewed, or editing its text** (which counts as reviewing it), is refused (`409 not_ready`) unless its status is `ready`. The check happens before anything else is applied, so a refused request changes nothing. Renaming and notes are always allowed. (The Fix path for failed uploads, a later ticket, will add the one deliberate exception.)
+- **Duplicating** is refused (`409 not_ready`) unless the Resume is `ready`. A copy keeps the text and the reviewed state but not the Original or any failure, because the file belongs to the source.
+- **File names** from the user's computer are never used as they are. One rule turns them into safe names: only the last path segment is used, control and non-ASCII characters are removed, the rest becomes letters, digits, hyphens and underscores, an allowed extension (`pdf`, `docx`, `txt`) is kept in lower case, the length is capped at 100, and an empty result is `resume`. A name like `cv.pdf.exe` becomes `cv-pdf-exe`, so a disguised extension never survives as a dot.
+- **Tests** can use an in-memory object store (an interface with the same shape as the real bucket). It records what was asked of the signer, so tests can check the signed size, type, key and expiry.
 
 ## Rules
 

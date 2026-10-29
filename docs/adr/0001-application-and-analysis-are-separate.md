@@ -1,0 +1,3 @@
+# An Application is the job; an Analysis is one run for it
+
+The plan used "analysis" and "application" for the same thing. We split them: an **Application** is a job the user is pursuing (job description, company, role, link, tracker status) and an **Analysis** is one run of the AI pipeline for it with a chosen resume and model. One Application can have several Analyses, for example the same job run with two different resumes. We chose this over a single combined record because re-running a job with another resume is a core use, and it keeps the tracker (status, notes) separate from the generated output. The cost is one more record type, and it is expensive to change once data exists.

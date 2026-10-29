@@ -49,7 +49,7 @@ Single HTML file, vanilla JS, dark UI. Flow:
 - Score breakdown (skills, experience level, domain, keywords) rather than one opaque number.
 - Honesty guard: post-generation check that flags any employer, date, cert, or tech in the output that is absent from the source resume.
 - Side-by-side diff view of original vs tailored resume with accept/reject per change.
-- Multiple resume versions per application; prompt to pick the best base profile automatically (rank profiles against the JD).
+- Multiple resume versions per application; prompt to pick the best base resume automatically (rank the user's resumes against the JD).
 
 **Workflow**
 - Job tracker: saved applications with company, role, URL, status (Saved, Applied, Interview, Offer, Rejected), notes, dates, and the generated artefacts attached.
@@ -94,7 +94,7 @@ API Gateway (HTTP API, JWT authorizer, throttling)
    Step Functions (Express) or parallel Promise.all in one Lambda for "generate all"
 ```
 
-Decision: start with `POST /analyses` creating a record and running overview, cover letter, gaps, and resume as **parallel Lambda invocations / Step Functions Map**, with the UI polling `GET /analyses/{id}` (or SSE later). Chat uses a separate synchronous `POST /chat`. Simpler fallback for Phase 2: one Lambda doing `Promise.all`, keeping within API Gateway's 30s limit by using async (202 + poll) from the start.
+Decision: starting an Analysis (see GLOSSARY.md: an Application is the job, an Analysis is one run for it) creates a record and runs overview, cover letter, gaps, and resume as **parallel Lambda invocations / Step Functions Map**, with the UI polling the Analysis status (or SSE later). Chat uses a separate synchronous `POST /chat`. Simpler fallback for Phase 2: one Lambda doing `Promise.all`, keeping within API Gateway's 30s limit by using async (202 + poll) from the start.
 
 ### DynamoDB single table (`PK`, `SK`, GSI1)
 

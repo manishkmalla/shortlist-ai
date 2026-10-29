@@ -41,6 +41,13 @@ const toResume = (r: StoredResume): Resume => ({ ...toSummary(r), text: r.text }
 
 const newestFirst = (a: StoredResume, b: StoredResume) => b.updatedAt.localeCompare(a.updatedAt);
 
+/** Only a Resume whose text the app has actually read can be reviewed, edited as text, or copied. */
+const assertReady = (resume: StoredResume, action: string) => {
+  if (resume.status !== 'ready') {
+    throw new ResumeError('not_ready', `This resume is not ready yet, so it cannot be ${action}.`);
+  }
+};
+
 const limitError = () =>
   new ResumeError(
     'limit_reached',
@@ -95,9 +102,7 @@ export function createResumeService(deps: {
       await ensureRoom(userId);
       const source = await deps.repo.get(userId, id);
       if (!source) throw new ResumeError('not_found', 'Resume not found.');
-      if (source.status !== 'ready') {
-        throw new ResumeError('not_ready', 'This resume is not ready yet, so it cannot be duplicated.');
-      }
+      assertReady(source, 'duplicated');
       const stamp = now();
       const copy: StoredResume = {
         ...source,
@@ -117,13 +122,11 @@ export function createResumeService(deps: {
 
     /** Editing the text, or confirming it, marks the resume as reviewed. */
     async update(userId: string, id: string, input: UpdateResumeRequest): Promise<Resume | null> {
-      // Only text the app has actually read can be confirmed. Checked first, so a refusal changes nothing.
-      if (input.reviewed) {
+      // Editing the text counts as reviewing it, so both need a ready Resume. Checked first, so a refusal changes nothing.
+      if (input.reviewed || input.text !== undefined) {
         const current = await deps.repo.get(userId, id);
         if (!current) return null;
-        if (current.status !== 'ready') {
-          throw new ResumeError('not_ready', 'This resume is not ready yet, so its text cannot be confirmed.');
-        }
+        assertReady(current, 'marked as reviewed or have its text edited');
       }
       const stamp = now();
       const patch: ResumePatch = {

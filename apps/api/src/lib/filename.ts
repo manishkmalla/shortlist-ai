@@ -14,13 +14,13 @@ export function sanitiseFilename(name: string): string {
   const ext = dot >= 0 ? ascii.slice(dot + 1).toLowerCase() : '';
   const keepExt = ALLOWED_EXTENSIONS.includes(ext);
   const stem = keepExt ? ascii.slice(0, dot) : ascii;
-  const room = MAX_LENGTH - (keepExt ? ext.length + 1 : 0);
+  const maxStemLength = MAX_LENGTH - (keepExt ? ext.length + 1 : 0);
   const base =
     stem
       .replace(/[^A-Za-z0-9_-]+/g, '-')
       .replace(/-{2,}/g, '-')
       .replace(/^-+|-+$/g, '')
-      .slice(0, room)
+      .slice(0, maxStemLength)
       .replace(/-+$/g, '') || 'resume';
   return keepExt ? `${base}.${ext}` : base;
 }

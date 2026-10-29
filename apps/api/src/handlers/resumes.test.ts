@@ -410,9 +410,13 @@ describe('privacy', () => {
   });
 });
 
-
 /** Uploads arrive in a later ticket, so tests seed the Resumes an upload would leave behind. */
-const seedUpload = async (repo: ResumeRepo, userId: string, n: number, over: Partial<StoredResume> = {}) => {
+const seedUpload = async (
+  repo: ResumeRepo,
+  userId: string,
+  n: number,
+  overrides: Partial<StoredResume> = {},
+) => {
   const resume: StoredResume = {
     id: `00000000-0000-4000-8000-${String(900 + n).padStart(12, '0')}`,
     label: `Upload ${n}`,
@@ -425,7 +429,7 @@ const seedUpload = async (repo: ResumeRepo, userId: string, n: number, over: Par
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     original: { filename: 'alex-example-cv.pdf', size: 123_456, contentType: 'application/pdf' },
-    ...over,
+    ...overrides,
   };
   await repo.create(userId, resume);
   return resume;
@@ -447,15 +451,25 @@ describe('uploads: what a Resume says about its Original and failures', () => {
     const processing = await seedUpload(repo, 'a', 1);
     const failed = await seedUpload(repo, 'a', 2, {
       status: 'failed',
-      failure: { code: 'no_readable_text', message: 'No text was found. Paste your resume text instead.' },
+      failure: {
+        code: 'no_readable_text',
+        message: 'No text was found. Paste your resume text instead.',
+      },
     });
     const list = await listFor(svc, 'a');
     const byId = (id: string) => list.find((r: { id: string }) => r.id === id);
-    expect(byId(processing.id)).toMatchObject({ hasOriginal: true, failureReason: null, status: 'processing' });
+    expect(byId(processing.id)).toMatchObject({
+      hasOriginal: true,
+      failureReason: null,
+      status: 'processing',
+    });
     expect(byId(failed.id)).toMatchObject({
       hasOriginal: true,
       status: 'failed',
-      failureReason: { code: 'no_readable_text', message: 'No text was found. Paste your resume text instead.' },
+      failureReason: {
+        code: 'no_readable_text',
+        message: 'No text was found. Paste your resume text instead.',
+      },
     });
   });
 
@@ -471,22 +485,29 @@ describe('uploads: what a Resume says about its Original and failures', () => {
     expect(everything).not.toContain('contentType');
   });
 
-  it.each(['processing', 'failed'] as const)('refuses to mark a %s resume as reviewed', async (status) => {
-    const { svc, repo } = setup();
-    const { id } = await seedUpload(repo, 'a', 1, { status });
-    const r = res(await route(event('PUT /resumes/{id}', 'a', { id, body: { reviewed: true } }), svc));
-    expect(r.statusCode).toBe(409);
-    expect(body(r).error).toMatchObject({ code: 'not_ready' });
-    expect(body(r).error.message).toMatch(/not ready/i);
-    expect(body(await route(event('GET /resumes/{id}', 'a', { id }), svc)).reviewed).toBe(false);
-  });
+  it.each(['processing', 'failed'] as const)(
+    'refuses to mark a %s resume as reviewed',
+    async (status) => {
+      const { svc, repo } = setup();
+      const { id } = await seedUpload(repo, 'a', 1, { status });
+      const r = res(
+        await route(event('PUT /resumes/{id}', 'a', { id, body: { reviewed: true } }), svc),
+      );
+      expect(r.statusCode).toBe(409);
+      expect(body(r).error).toMatchObject({ code: 'not_ready' });
+      expect(body(r).error.message).toMatch(/not ready.*reviewed/i);
+      expect(body(await route(event('GET /resumes/{id}', 'a', { id }), svc)).reviewed).toBe(false);
+    },
+  );
 
   it('lets a ready upload be marked reviewed', async () => {
     const { svc, repo } = setup();
     const { id } = await seedUpload(repo, 'a', 1, { status: 'ready', text: TEXT });
     const before = body(await route(event('GET /resumes/{id}', 'a', { id }), svc));
     expect(before.reviewed).toBe(false);
-    const r = res(await route(event('PUT /resumes/{id}', 'a', { id, body: { reviewed: true } }), svc));
+    const r = res(
+      await route(event('PUT /resumes/{id}', 'a', { id, body: { reviewed: true } }), svc),
+    );
     expect(r.statusCode).toBe(200);
     expect(body(r).reviewed).toBe(true);
   });
@@ -494,13 +515,20 @@ describe('uploads: what a Resume says about its Original and failures', () => {
   it('a refused review does not change anything else sent with it', async () => {
     const { svc, repo } = setup();
     const { id } = await seedUpload(repo, 'a', 1, { status: 'processing' });
-    await route(event('PUT /resumes/{id}', 'a', { id, body: { reviewed: true, label: 'Sneaky' } }), svc);
+    await route(
+      event('PUT /resumes/{id}', 'a', { id, body: { reviewed: true, label: 'Sneaky' } }),
+      svc,
+    );
     expect(body(await route(event('GET /resumes/{id}', 'a', { id }), svc)).label).toBe('Upload 1');
   });
 
   it('a copy of an uploaded resume keeps the text but not the Original', async () => {
     const { svc, repo } = setup();
-    const source = await seedUpload(repo, 'a', 1, { status: 'ready', text: TEXT, reviewedAt: '2026-01-01T00:00:00.000Z' });
+    const source = await seedUpload(repo, 'a', 1, {
+      status: 'ready',
+      text: TEXT,
+      reviewedAt: '2026-01-01T00:00:00.000Z',
+    });
     const r = res(await route(event('POST /resumes/{id}/duplicate', 'a', { id: source.id }), svc));
     expect(r.statusCode).toBe(201);
     expect(body(r)).toMatchObject({
@@ -522,5 +550,49 @@ describe('uploads: what a Resume says about its Original and failures', () => {
     expect(r.statusCode).toBe(409);
     expect(body(r).error.code).toBe('not_ready');
     expect(await listFor(svc, 'a')).toHaveLength(1);
+  });
+
+  it.each(['processing', 'failed'] as const)(
+    'refuses to change the text of a %s resume, because that would mark it reviewed',
+    async (status) => {
+      const { svc, repo } = setup();
+      const { id } = await seedUpload(repo, 'a', 1, { status });
+      const r = res(
+        await route(event('PUT /resumes/{id}', 'a', { id, body: { text: TEXT } }), svc),
+      );
+      expect(r.statusCode).toBe(409);
+      expect(body(r).error.code).toBe('not_ready');
+      const after = body(await route(event('GET /resumes/{id}', 'a', { id }), svc));
+      expect(after).toMatchObject({ text: '', reviewed: false, status });
+    },
+  );
+
+  it.each(['processing', 'failed'] as const)(
+    'still lets a %s resume be renamed',
+    async (status) => {
+      const { svc, repo } = setup();
+      const { id } = await seedUpload(repo, 'a', 1, { status });
+      const r = res(
+        await route(
+          event('PUT /resumes/{id}', 'a', { id, body: { label: 'Renamed', notes: 'n' } }),
+          svc,
+        ),
+      );
+      expect(r.statusCode).toBe(200);
+      expect(body(r)).toMatchObject({ label: 'Renamed', notes: 'n', status, reviewed: false });
+    },
+  );
+
+  it("user B cannot review, edit or duplicate user A's resume that is not ready (it simply does not exist for B)", async () => {
+    const { svc, repo } = setup();
+    const { id } = await seedUpload(repo, 'a', 1, { status: 'processing' });
+    for (const [key, payload] of [
+      ['PUT /resumes/{id}', { reviewed: true }],
+      ['PUT /resumes/{id}', { text: TEXT }],
+      ['POST /resumes/{id}/duplicate', undefined],
+    ] as const) {
+      const r = res(await route(event(key, 'b', { id, body: payload }), svc));
+      expect(r.statusCode).toBe(404);
+    }
   });
 });

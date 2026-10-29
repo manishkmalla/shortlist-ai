@@ -57,7 +57,7 @@ How it behaves:
 The upload path itself arrives ticket by ticket (see the upload spec). The model is ready for it:
 
 - A stored Resume can carry its Original's sanitised file name, size and type, and a failure reason. Storage keys are never stored: they are built from the user and Resume ids.
-- **Marking a Resume reviewed** is refused (`409 not_ready`) unless its status is `ready`. The check happens before anything else is applied, so a refused request changes nothing.
+- **Marking a Resume reviewed, or editing its text** (which counts as reviewing it), is refused (`409 not_ready`) unless its status is `ready`. The check happens before anything else is applied, so a refused request changes nothing. Renaming and notes are always allowed. (The Fix path for failed uploads, a later ticket, will add the one deliberate exception.)
 - **Duplicating** is refused (`409 not_ready`) unless the Resume is `ready`. A copy keeps the text and the reviewed state but not the Original or any failure, because the file belongs to the source.
 - **File names** from the user's computer are never used as they are. One rule turns them into safe names: only the last path segment is used, control and non-ASCII characters are removed, the rest becomes letters, digits, hyphens and underscores, an allowed extension (`pdf`, `docx`, `txt`) is kept in lower case, the length is capped at 100, and an empty result is `resume`. A name like `cv.pdf.exe` becomes `cv-pdf-exe`, so a disguised extension never survives as a dot.
 - **Tests** can use an in-memory object store (an interface with the same shape as the real bucket). It records what was asked of the signer, so tests can check the signed size, type, key and expiry.

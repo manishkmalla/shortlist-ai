@@ -62,6 +62,46 @@ The upload path itself arrives ticket by ticket (see the upload spec). The model
 - **File names** from the user's computer are never used as they are. One rule turns them into safe names: only the last path segment is used, control and non-ASCII characters are removed, the rest becomes letters, digits, hyphens and underscores, an allowed extension (`pdf`, `docx`, `txt`) is kept in lower case, the length is capped at 100, and an empty result is `resume`. A name like `cv.pdf.exe` becomes `cv-pdf-exe`, so a disguised extension never survives as a dot.
 - **Tests** can use an in-memory object store (an interface with the same shape as the real bucket). It records what was asked of the signer, so tests can check the signed size, type, key and expiry.
 
+## Uploading a text file
+
+A user can add a Resume by uploading a `.txt` file. (PDF and Word follow in later tickets.) The browser sends the file straight to private storage, and a background function reads it.
+
+```text
+Browser                     API                          Storage              Extraction
+  | POST /resumes/upload-url  |                             |                     |
+  |-------------------------->| checks name, size, type,    |                     |
+  |                           | limit; creates Resume       |                     |
+  |<--------------------------| (processing) + signed PUT   |                     |
+  | PUT file ---------------------------------------------->| new file event ---->|
+  |                                                         |   reads, checks,    |
+  | poll Resume status <----------------------------------- |   saves the text    |
+  |   processing -> ready (needs review) or failed + reason |<--------------------|
+```
+
+**Requesting an upload** (`POST /resumes/upload-url`, `{ filename, size, contentType?, label? }`):
+
+| Check | Refused with |
+|---|---|
+| Extension is not one we can read (today only `.txt`), or there is none | 400 `unsupported_type`, listing what is supported |
+| Declared content type does not match the extension (an empty one is accepted) | 400 `type_mismatch` |
+| Over 5 MB | 400 `file_too_large` |
+| Missing or wrong fields, unknown fields (for example `userId`) | 400 `invalid_request` |
+| 10 Resumes already, counting processing and failed ones | 409 `limit_reached` |
+
+It returns the new Resume (status `processing`, source `upload`, unreviewed, no text) and the upload: a URL, the method (`PUT`), the one header to send (`Content-Type`), and a five minute expiry. The URL is signed for this exact size and type, so storage rejects anything else. The Resume's label defaults to the file name without its extension (or the label the user gave). The first Resume added, by any route, becomes the default.
+
+**Signing details that matter:** the signature covers `content-type` and `content-length`, so storage refuses a file of a different type or size. The S3 client is configured to add checksums only when an operation requires one. Without that, recent SDK versions put a checksum of an *empty* body into the signed URL, and storage rejects every real file. Check this after any SDK upgrade: a presigned upload URL must not contain `x-amz-checksum-*` parameters.
+
+**Where the file goes:** `uploads/<user id>/<resume id>/<sanitised file name>` in a private, encrypted, TLS-only bucket that is kept when the stack is deleted. The key is built only from ids and the sanitised name.
+
+**Reading the file** runs whenever a new file appears under the uploads prefix. It checks the size again, then the bytes (not the name): a PDF or zip renamed to `.txt`, or any binary file, is refused as `wrong_type`; UTF-16 or other non-UTF-8 text as `unsupported_encoding`. A leading byte order mark is removed and line endings become `\n`. Text under 20 characters fails as `no_readable_text` ("paste your resume text instead"), and over 60,000 as `text_too_long` (saying how long it was). On success the Resume becomes `ready`, with its text, still unreviewed. On failure it becomes `failed` with a reason the user can read. Either way the Original is kept.
+
+It is safe to run twice: a Resume that is no longer `processing` is left alone, so a repeated event never overwrites later edits. A file whose Resume no longer exists, or that was filed under another user's id, is deleted as an orphan. One bad file in a batch never stops the others. Logs hold ids, sizes, outcomes and reason codes, never file names or text.
+
+**On the web:** Add resume has two tabs, **Upload files** (first) and **Paste text** (kept mounted, so pasted text survives a look at the other tab). The upload tab checks the file before sending anything (type, empty, 5 MB), shows progress, then "Extracting", then "Done" with a link to My Resumes, or the reason it failed. The library list shows a **Processing** badge and checks again every two seconds until nothing is processing.
+
+**Local development:** the development bucket also allows uploads from `http://localhost:5173`, so `npm run dev` can upload against the deployed environment. Production allows the CloudFront origin only. The API's own CORS is unchanged.
+
 ## Rules
 
 - **Limit:** 10 resumes per user. Create and duplicate both check it. The check is not atomic, so two simultaneous requests could briefly exceed it. That is harmless and bounded by the API throttle.
@@ -80,6 +120,7 @@ Six functions, one per route, sharing one handler (`apps/api/src/handlers/resume
 | `ListResumes` | `Query` |
 | `GetResume` | `GetItem` |
 | `CreateResume` | `Query`, `PutItem` |
+| `RequestUpload` | `Query`, `PutItem`, and `s3:PutObject` on `uploads/*` only. The only function that can write files |
 | `DuplicateResume` | `GetItem`, `Query`, `PutItem` |
 | `UpdateResume` | `GetItem`, `Query`, `UpdateItem` (the default switch is a transaction of updates) |
 | `DeleteResume` | `GetItem`, `Query`, `DeleteItem`, `UpdateItem` |

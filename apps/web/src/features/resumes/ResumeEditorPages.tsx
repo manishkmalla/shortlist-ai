@@ -1,9 +1,19 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Button, Card, buttonStyles, useToast } from '../../components/ui';
+import {
+  Button,
+  Card,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  buttonStyles,
+  useToast,
+} from '../../components/ui';
 import { errorMessage } from '../../lib/api';
 import { useCreateResume, useResume, useResumes, useUpdateResume } from './hooks';
 import { ResumeForm, type ChangedFields, type ResumeFormValues } from './ResumeForm';
+import { UploadPanel } from './UploadPanel';
 import { DiscardChangesDialog, useLeaveGuard } from './useLeaveGuard';
 
 function Back() {
@@ -49,18 +59,30 @@ export function NewResumePage() {
             This will be your default resume. You can change that later.
           </p>
         )}
-        <ResumeForm
-          submitLabel="Save resume"
-          error={error}
-          onSubmit={save}
-          onDirtyChange={setDirty}
-          onSaved={() => leave(() => navigate('/resumes'))}
-          actions={
-            <Link to="/resumes" className={buttonStyles('secondary')}>
-              Cancel
-            </Link>
-          }
-        />
+        <Tabs defaultValue="upload">
+          <TabsList aria-label="How to add a resume">
+            <TabsTrigger value="upload">Upload files</TabsTrigger>
+            <TabsTrigger value="paste">Paste text</TabsTrigger>
+          </TabsList>
+          <TabsContent value="upload">
+            <UploadPanel />
+          </TabsContent>
+          {/* Kept mounted (just hidden) so pasted text is not lost when the user looks at the other tab. */}
+          <TabsContent value="paste" forceMount className="data-[state=inactive]:hidden">
+            <ResumeForm
+              submitLabel="Save resume"
+              error={error}
+              onSubmit={save}
+              onDirtyChange={setDirty}
+              onSaved={() => leave(() => navigate('/resumes'))}
+              actions={
+                <Link to="/resumes" className={buttonStyles('secondary')}>
+                  Cancel
+                </Link>
+              }
+            />
+          </TabsContent>
+        </Tabs>
       </Card>
       <DiscardChangesDialog blocker={blocker} />
     </div>

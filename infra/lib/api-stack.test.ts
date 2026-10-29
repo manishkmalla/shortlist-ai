@@ -4,12 +4,19 @@ import { describe, expect, it } from 'vitest';
 import { ApiStack } from './api-stack';
 import { AuthStack } from './auth-stack';
 import { DataStack } from './data-stack';
+import { UploadsStack } from './uploads-stack';
 
 function build() {
   const app = new App();
   const data = new DataStack(app, 'D', { envName: 'dev' });
   const auth = new AuthStack(app, 'A', { envName: 'dev', table: data.table });
+  const uploads = new UploadsStack(app, 'U', {
+    envName: 'dev',
+    table: data.table,
+    siteOrigin: 'https://example.cloudfront.net',
+  });
   const api = new ApiStack(app, 'T', {
+    uploadsBucket: uploads.bucket,
     envName: 'dev',
     userPool: auth.userPool,
     userPoolClient: auth.userPoolClient,
@@ -26,7 +33,7 @@ const template = build();
 describe('ApiStack', () => {
   it('every route requires the JWT authorizer', () => {
     const routes = template.findResources('AWS::ApiGatewayV2::Route');
-    expect(Object.keys(routes)).toHaveLength(13);
+    expect(Object.keys(routes)).toHaveLength(14);
     for (const r of Object.values(routes)) {
       expect(r.Properties.AuthorizationType).toBe('JWT');
     }
@@ -170,5 +177,44 @@ describe('ApiStack resume routes', () => {
       expect(actions).not.toContain('dynamodb:Scan');
       expect(actions.some((a) => a.startsWith('kms:') || a.startsWith('cognito-idp:'))).toBe(false);
     }
+  });
+});
+
+describe('ApiStack upload route', () => {
+  const find = (re: RegExp) =>
+    Object.entries(template.findResources('AWS::IAM::Policy')).filter(([id]) => re.test(id));
+  const statements = (re: RegExp) =>
+    find(re).flatMap(
+      ([, p]) =>
+        p.Properties.PolicyDocument.Statement as { Action: string | string[]; Resource: unknown }[],
+    );
+
+  it('exposes POST /resumes/upload-url behind the authorizer', () => {
+    const routes = Object.values(template.findResources('AWS::ApiGatewayV2::Route')).find(
+      (r) => r.Properties.RouteKey === 'POST /resumes/upload-url',
+    );
+    expect(routes?.Properties.AuthorizationType).toBe('JWT');
+  });
+
+  it('can start an upload, and can only write under the uploads prefix of the bucket', () => {
+    const all = statements(/RequestUpload/);
+    const actions = all.flatMap((s) => ([] as string[]).concat(s.Action)).sort();
+    expect(actions).toEqual(['dynamodb:PutItem', 'dynamodb:Query', 's3:PutObject']);
+    const s3 = all.find((s) => JSON.stringify(s.Action).includes('s3:'))!;
+    expect(JSON.stringify(s3.Resource)).toContain('/uploads/*');
+  });
+
+  it('no other function can write files', () => {
+    const writers = Object.entries(template.findResources('AWS::IAM::Policy')).filter(([, p]) =>
+      JSON.stringify(p).includes('s3:PutObject'),
+    );
+    expect(writers).toHaveLength(1);
+    expect(writers[0]![0]).toMatch(/RequestUpload/);
+  });
+
+  it('every function knows the bucket name', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Environment: { Variables: Match.objectLike({ BUCKET_NAME: Match.anyValue() }) },
+    });
   });
 });

@@ -1,7 +1,8 @@
 import type { APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
-import { MAX_RESUMES } from '@shortlist-ai/shared';
+import { MAX_RESUMES, MAX_UPLOAD_BYTES } from '@shortlist-ai/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ApiEvent } from '../lib/http';
+import { createFakeObjectStore } from '../lib/fakeObjectStore';
 import { createFakeDb } from '../repo/fakeDb';
 import { createResumeRepo, type ResumeRepo, type StoredResume } from '../repo/resumeRepo';
 import { createResumeService } from '../services/resumeService';
@@ -14,12 +15,14 @@ function setup() {
   let n = 0;
   let clock = Date.parse('2026-01-01T00:00:00.000Z');
   const repo = createResumeRepo(db, 't');
+  const storage = createFakeObjectStore();
   const svc = createResumeService({
     repo,
+    store: storage.store,
     newId: () => `00000000-0000-4000-8000-${String(++n).padStart(12, '0')}`,
     now: () => new Date((clock += 1000)),
   });
-  return { svc, items, repo };
+  return { svc, items, repo, storage };
 }
 
 function event(
@@ -594,5 +597,172 @@ describe('uploads: what a Resume says about its Original and failures', () => {
       const r = res(await route(event(key, 'b', { id, body: payload }), svc));
       expect(r.statusCode).toBe(404);
     }
+  });
+});
+
+describe('requesting an upload', () => {
+  const ask = (svc: Svc, sub: string, payload: unknown) =>
+    route(event('POST /resumes/upload-url', sub, { body: payload }), svc);
+  const first = '00000000-0000-4000-8000-000000000001';
+
+  it('creates a processing Resume and a short-lived upload signed for the exact size and type', async () => {
+    const { svc, storage } = setup();
+    const r = res(
+      await ask(svc, 'a', {
+        filename: 'Alex Example CV.txt',
+        size: 2048,
+        contentType: 'text/plain',
+      }),
+    );
+    expect(r.statusCode).toBe(201);
+    expect(body(r).resume).toMatchObject({
+      id: first,
+      label: 'Alex Example CV',
+      status: 'processing',
+      source: 'upload',
+      hasOriginal: true,
+      reviewed: false,
+      isDefault: true,
+      textLength: 0,
+      failureReason: null,
+    });
+    expect(body(r).upload).toMatchObject({
+      method: 'PUT',
+      headers: { 'Content-Type': 'text/plain' },
+      expiresInSeconds: 300,
+    });
+    expect(body(r).upload.url).toMatch(/^https:\/\//);
+    expect(storage.uploads).toEqual([
+      {
+        key: `uploads/a/${first}/Alex-Example-CV.txt`,
+        contentType: 'text/plain',
+        size: 2048,
+        expiresInSeconds: 300,
+      },
+    ]);
+  });
+
+  it('the new Resume shows up in the library as processing', async () => {
+    const { svc } = setup();
+    await ask(svc, 'a', { filename: 'cv.txt', size: 100 });
+    expect(await listFor(svc, 'a')).toMatchObject([
+      { label: 'cv', status: 'processing', hasOriginal: true },
+    ]);
+  });
+
+  it('uses the label the user gave, trimmed, and only the first resume becomes the default', async () => {
+    const { svc } = setup();
+    await ask(svc, 'a', { filename: 'one.txt', size: 100 });
+    const second = body(
+      await ask(svc, 'a', { filename: 'two.txt', size: 100, label: '  ML Engineer ' }),
+    ).resume;
+    expect(second).toMatchObject({ label: 'ML Engineer', isDefault: false });
+  });
+
+  it('accepts a missing or empty content type, and an upload of exactly the size limit', async () => {
+    const { svc } = setup();
+    expect(
+      res(await ask(svc, 'a', { filename: 'a.txt', size: 10, contentType: '' })).statusCode,
+    ).toBe(201);
+    expect(res(await ask(svc, 'a', { filename: 'b.txt', size: MAX_UPLOAD_BYTES })).statusCode).toBe(
+      201,
+    );
+  });
+
+  it.each([
+    ['a PDF (not readable yet)', { filename: 'cv.pdf', size: 100 }, 'unsupported_type'],
+    ['a Word document (not readable yet)', { filename: 'cv.docx', size: 100 }, 'unsupported_type'],
+    ['an executable', { filename: 'cv.exe', size: 100 }, 'unsupported_type'],
+    ['a name with no extension', { filename: 'cv', size: 100 }, 'unsupported_type'],
+    ['a disguised extension', { filename: 'cv.txt.exe', size: 100 }, 'unsupported_type'],
+    [
+      'one byte over the size limit',
+      { filename: 'cv.txt', size: MAX_UPLOAD_BYTES + 1 },
+      'file_too_large',
+    ],
+    [
+      'a content type that does not match the extension',
+      { filename: 'cv.txt', size: 100, contentType: 'application/pdf' },
+      'type_mismatch',
+    ],
+    [
+      'an HTML content type',
+      { filename: 'cv.txt', size: 100, contentType: 'text/html' },
+      'type_mismatch',
+    ],
+  ])('refuses %s with a clear 400 and signs nothing', async (_name, payload, code) => {
+    const { svc, storage } = setup();
+    const r = res(await ask(svc, 'a', payload));
+    expect(r.statusCode).toBe(400);
+    expect(body(r).error.code).toBe(code);
+    expect(body(r).error.message.length).toBeGreaterThan(10);
+    expect(storage.uploads).toHaveLength(0);
+    expect(await listFor(svc, 'a')).toHaveLength(0);
+  });
+
+  it.each([
+    ['no filename', { size: 100 }],
+    ['an empty filename', { filename: '', size: 100 }],
+    ['a zero size', { filename: 'cv.txt', size: 0 }],
+    ['a negative size', { filename: 'cv.txt', size: -5 }],
+    ['a fractional size', { filename: 'cv.txt', size: 10.5 }],
+    ['a size that is not a number', { filename: 'cv.txt', size: '100' }],
+    ['an unknown field (userId)', { filename: 'cv.txt', size: 100, userId: 'b' }],
+    ['a blank label', { filename: 'cv.txt', size: 100, label: '   ' }],
+    ['an over-long label', { filename: 'cv.txt', size: 100, label: 'x'.repeat(81) }],
+  ])('refuses a request with %s', async (_name, payload) => {
+    const { svc, storage } = setup();
+    expect(res(await ask(svc, 'a', payload)).statusCode).toBe(400);
+    expect(storage.uploads).toHaveLength(0);
+  });
+
+  it('counts processing and failed resumes towards the ten resume limit', async () => {
+    const { svc, repo, storage } = setup();
+    for (let i = 0; i < MAX_RESUMES; i++) {
+      await seedUpload(repo, 'a', i + 1, { status: i % 2 === 0 ? 'processing' : 'failed' });
+    }
+    const r = res(await ask(svc, 'a', { filename: 'cv.txt', size: 100 }));
+    expect(r.statusCode).toBe(409);
+    expect(body(r).error.code).toBe('limit_reached');
+    expect(storage.uploads).toHaveLength(0);
+  });
+
+  it('never trusts the file name: the key and stored name are sanitised, the label keeps the readable name', async () => {
+    const { svc, storage } = setup();
+    const r = await ask(svc, 'a', { filename: '../../évil name.txt', size: 100 });
+    expect(body(r).resume.label).toBe('évil name');
+    expect(storage.uploads[0]!.key).toBe(`uploads/a/${first}/vil-name.txt`);
+  });
+
+  it('derives a label of at most 80 characters from a very long name', async () => {
+    const { svc } = setup();
+    const r = await ask(svc, 'a', { filename: `${'long '.repeat(40)}.txt`, size: 100 });
+    expect(body(r).resume.label.length).toBeLessThanOrEqual(80);
+    expect(body(r).resume.label.length).toBeGreaterThan(0);
+  });
+
+  it('uploads are filed under the caller, and each user sees only their own', async () => {
+    const { svc, storage } = setup();
+    await ask(svc, 'a', { filename: 'cv.txt', size: 100 });
+    await ask(svc, 'b', { filename: 'cv.txt', size: 100 });
+    expect(storage.uploads.map((u) => u.key.split('/')[1])).toEqual(['a', 'b']);
+    expect(await listFor(svc, 'a')).toHaveLength(1);
+    expect(await listFor(svc, 'b')).toHaveLength(1);
+  });
+
+  it('does not let a client choose the owner', async () => {
+    const { svc, storage } = setup();
+    await ask(svc, 'a', { filename: 'cv.txt', size: 100, userId: 'b' });
+    expect(storage.uploads).toHaveLength(0);
+  });
+
+  it('never logs file names', async () => {
+    const spies = (['log', 'info', 'warn', 'error', 'debug'] as const).map((m) =>
+      vi.spyOn(console, m).mockImplementation(() => undefined),
+    );
+    const { svc } = setup();
+    await ask(svc, 'a', { filename: 'alex-secret-cv.txt', size: 100 });
+    await ask(svc, 'a', { filename: 'alex-secret-cv.exe', size: 100 });
+    expect(JSON.stringify(spies.flatMap((s) => s.mock.calls))).not.toContain('alex-secret');
   });
 });

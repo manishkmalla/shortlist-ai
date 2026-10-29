@@ -90,3 +90,57 @@ export const updateResumeRequestSchema = z
     message: 'Provide a field to update',
   });
 export type UpdateResumeRequest = z.infer<typeof updateResumeRequestSchema>;
+
+/** Largest file a user may upload as an Original. */
+export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+
+/** The types an Original can have, and the content type each one is stored and downloaded as. */
+export const ORIGINAL_CONTENT_TYPES = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  txt: 'text/plain',
+} as const;
+export type OriginalExtension = keyof typeof ORIGINAL_CONTENT_TYPES;
+export const ORIGINAL_EXTENSIONS = Object.keys(ORIGINAL_CONTENT_TYPES) as OriginalExtension[];
+
+/** The lower-case extension of the last path segment of a file name, or an empty string when there is none. */
+export const fileExtension = (filename: string): string => {
+  const leaf = filename.split(/[\\/]/).pop() ?? '';
+  const dot = leaf.lastIndexOf('.');
+  return dot >= 0
+    ? leaf
+        .slice(dot + 1)
+        .trim()
+        .toLowerCase()
+    : '';
+};
+
+/** The types that can be uploaded today. Later tickets add `pdf` and `docx` here once they can be read. */
+export const UPLOADABLE_EXTENSIONS: readonly OriginalExtension[] = ['txt'];
+
+export const requestUploadSchema = z
+  .object({
+    filename: z.string().min(1).max(255),
+    size: z.number().int().positive(),
+    /** What the browser reports for the file. Optional because browsers often leave it empty. */
+    contentType: z.string().max(255).optional(),
+    label: resumeLabelSchema.optional(),
+  })
+  .strict();
+export type RequestUploadRequest = z.infer<typeof requestUploadSchema>;
+
+/** A short-lived permission to send one file straight to storage. */
+export const presignedUploadSchema = z.object({
+  url: z.string().url(),
+  method: z.literal('PUT'),
+  /** The exact headers the browser must send. The signature covers them. */
+  headers: z.record(z.string()),
+  expiresInSeconds: z.number().int().positive(),
+});
+export type PresignedUpload = z.infer<typeof presignedUploadSchema>;
+
+export const uploadStartedSchema = z.object({
+  resume: resumeSummarySchema,
+  upload: presignedUploadSchema,
+});
+export type UploadStarted = z.infer<typeof uploadStartedSchema>;

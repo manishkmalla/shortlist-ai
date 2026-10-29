@@ -1,7 +1,9 @@
 import {
   resumeListSchema,
   resumeSchema,
+  uploadStartedSchema,
   type CreateResumeRequest,
+  type RequestUploadRequest,
   type UpdateResumeRequest,
 } from '@shortlist-ai/shared';
 import { apiRequest } from '../../lib/api';
@@ -11,6 +13,8 @@ export const resumesApi = {
   get: (id: string) => apiRequest(`/resumes/${id}`, { schema: resumeSchema }),
   create: (body: CreateResumeRequest) =>
     apiRequest('/resumes', { method: 'POST', body, schema: resumeSchema }),
+  requestUpload: (body: RequestUploadRequest) =>
+    apiRequest('/resumes/upload-url', { method: 'POST', body, schema: uploadStartedSchema }),
   update: (id: string, body: UpdateResumeRequest) =>
     apiRequest(`/resumes/${id}`, { method: 'PUT', body, schema: resumeSchema }),
   remove: (id: string) => apiRequest(`/resumes/${id}`, { method: 'DELETE' }),

@@ -263,7 +263,11 @@ describe('My Resumes list', () => {
 });
 
 describe('Add resume', () => {
+  const openPaste = async (user: ReturnType<typeof userEvent.setup>) =>
+    user.click(await screen.findByRole('tab', { name: 'Paste text' }));
+
   const fill = async (user: ReturnType<typeof userEvent.setup>, label = 'AI Engineer') => {
+    await openPaste(user);
     await user.type(await screen.findByLabelText('Label'), label);
     await user.click(screen.getByLabelText('Resume text'));
     await user.paste(TEXT);
@@ -273,6 +277,7 @@ describe('Add resume', () => {
     const user = userEvent.setup();
     renderAt('/resumes/new');
     expect(await screen.findByText(/This will be your default resume/)).toBeInTheDocument();
+    await openPaste(user);
     expect(
       screen.getByText(`0 / ${MAX_RESUME_TEXT_CHARS.toLocaleString('en-US')} characters`),
     ).toBeInTheDocument();
@@ -283,6 +288,7 @@ describe('Add resume', () => {
   it('validates the label and the text before calling the API', async () => {
     const user = userEvent.setup();
     renderAt('/resumes/new');
+    await openPaste(user);
     await user.click(await screen.findByRole('button', { name: 'Save resume' }));
     expect(await screen.findByText('Give the resume a label')).toBeInTheDocument();
     expect(screen.getByText('The resume text is too short')).toBeInTheDocument();
@@ -292,6 +298,7 @@ describe('Add resume', () => {
   it('refuses text over the limit with a visible message and does not save', async () => {
     const user = userEvent.setup();
     renderAt('/resumes/new');
+    await openPaste(user);
     await user.type(await screen.findByLabelText('Label'), 'Long');
     fireEvent.change(screen.getByLabelText('Resume text'), {
       target: { value: 'x'.repeat(MAX_RESUME_TEXT_CHARS + 5) },

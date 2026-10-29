@@ -1,5 +1,5 @@
-/** Extensions the app accepts for an Original. Anything else is not kept as an extension. */
-const ALLOWED_EXTENSIONS = ['pdf', 'docx', 'txt'];
+import { ORIGINAL_EXTENSIONS } from '@shortlist-ai/shared';
+
 const MAX_LENGTH = 100;
 
 /**
@@ -12,7 +12,7 @@ export function sanitiseFilename(name: string): string {
   const ascii = leaf.replace(/[^\x20-\x7e]/g, '').trim();
   const dot = ascii.lastIndexOf('.');
   const ext = dot >= 0 ? ascii.slice(dot + 1).toLowerCase() : '';
-  const keepExt = ALLOWED_EXTENSIONS.includes(ext);
+  const keepExt = (ORIGINAL_EXTENSIONS as string[]).includes(ext);
   const stem = keepExt ? ascii.slice(0, dot) : ascii;
   const maxStemLength = MAX_LENGTH - (keepExt ? ext.length + 1 : 0);
   const base =

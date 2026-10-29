@@ -6,6 +6,7 @@ import type { ITable } from 'aws-cdk-lib/aws-dynamodb';
 import { Effect, PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import type { IUserPool, IUserPoolClient } from 'aws-cdk-lib/aws-cognito';
 import type { IKey } from 'aws-cdk-lib/aws-kms';
+import type { IBucket } from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
 import { apiFunction } from './lambda';
 
@@ -15,6 +16,8 @@ export interface ApiStackProps extends StackProps {
   userPoolClient: IUserPoolClient;
   table: ITable;
   apiKeyKey: IKey;
+  /** Where uploaded files (Originals) are stored. */
+  uploadsBucket: IBucket;
   /** Model used until a user picks one. Must be on the allow-list in packages/shared. */
   defaultModelId: string;
   /** The CloudFront origin, e.g. https://d123.cloudfront.net. CORS is limited to it. */
@@ -57,6 +60,7 @@ export class ApiStack extends Stack {
       TABLE_NAME: props.table.tableName,
       USER_POOL_ID: props.userPool.userPoolId,
       KEY_ID: props.apiKeyKey.keyArn,
+      BUCKET_NAME: props.uploadsBucket.bucketName,
       DEFAULT_MODEL_ID: props.defaultModelId,
     };
     const route = (fnId: string, handlerFile: string, method: HttpMethod, path: string) => {
@@ -150,6 +154,23 @@ export class ApiStack extends Stack {
       'dynamodb:GetItem',
       'dynamodb:Query',
       'dynamodb:PutItem',
+    );
+
+    // Starting an upload creates the Resume and signs a one-file upload. The signature only works if this role
+    // may write under the uploads prefix, so that is the only storage permission it has.
+    const requestUpload = route(
+      'RequestUpload',
+      'resumes.ts',
+      HttpMethod.POST,
+      '/resumes/upload-url',
+    );
+    props.table.grant(requestUpload, 'dynamodb:Query', 'dynamodb:PutItem');
+    requestUpload.addToRolePolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ['s3:PutObject'],
+        resources: [props.uploadsBucket.arnForObjects('uploads/*')],
+      }),
     );
 
     new CfnOutput(this, 'ApiUrl', { value: this.api.apiEndpoint });

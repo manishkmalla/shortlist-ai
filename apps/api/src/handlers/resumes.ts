@@ -1,8 +1,13 @@
 import type { APIGatewayProxyHandlerV2WithJWTAuthorizer } from 'aws-lambda';
 import { randomUUID } from 'node:crypto';
-import { createResumeRequestSchema, updateResumeRequestSchema } from '@shortlist-ai/shared';
+import {
+  createResumeRequestSchema,
+  requestUploadSchema,
+  updateResumeRequestSchema,
+} from '@shortlist-ai/shared';
 import { errorResponse, identityFrom, json, parseBody, type ApiEvent } from '../lib/http';
 import { logger } from '../lib/logger';
+import { createS3ObjectStore } from '../lib/s3ObjectStore';
 import { createDb } from '../repo/db';
 import { createResumeRepo } from '../repo/resumeRepo';
 import { createResumeService, ResumeError, type ResumeService } from '../services/resumeService';
@@ -14,11 +19,24 @@ const ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 function service(): ResumeService {
   return createResumeService({
     repo: createResumeRepo(createDb(), process.env.TABLE_NAME ?? ''),
+    store: createS3ObjectStore(process.env.BUCKET_NAME ?? ''),
     newId: randomUUID,
   });
 }
 
 const notFound = () => errorResponse(404, 'not_found', 'Resume not found.');
+
+const fromResumeError = (e: ResumeError) => {
+  switch (e.code) {
+    case 'not_found':
+      return notFound();
+    case 'limit_reached':
+    case 'not_ready':
+      return errorResponse(409, e.code, e.message);
+    default:
+      return errorResponse(400, e.code, e.message);
+  }
+};
 
 /** One function per route in CDK (least-privilege IAM); dispatch is by the route key. */
 export async function route(event: ApiEvent, svc: ResumeService) {
@@ -41,6 +59,17 @@ export async function route(event: ApiEvent, svc: ResumeService) {
           );
         }
         return json(201, await svc.create(userId, body));
+      }
+
+      case 'POST /resumes/upload-url': {
+        const body = parseBody(event, requestUploadSchema);
+        if (!body)
+          return errorResponse(
+            400,
+            'invalid_request',
+            'Provide the file name and its size in bytes.',
+          );
+        return json(201, await svc.requestUpload(userId, body));
       }
 
       case 'GET /resumes/{id}': {
@@ -70,8 +99,7 @@ export async function route(event: ApiEvent, svc: ResumeService) {
         return errorResponse(405, 'method_not_allowed', 'Method not allowed.');
     }
   } catch (e) {
-    if (e instanceof ResumeError)
-      return e.code === 'not_found' ? notFound() : errorResponse(409, e.code, e.message);
+    if (e instanceof ResumeError) return fromResumeError(e);
     throw e;
   }
 }

@@ -766,3 +766,78 @@ describe('requesting an upload', () => {
     expect(JSON.stringify(spies.flatMap((s) => s.mock.calls))).not.toContain('alex-secret');
   });
 });
+
+describe('reviewing an uploaded resume', () => {
+  const ready = (repo: ResumeRepo, n = 1) =>
+    seedUpload(repo, 'a', n, { status: 'ready', text: TEXT });
+
+  it('starts out needing review', async () => {
+    const { svc, repo } = setup();
+    const { id } = await ready(repo);
+    expect(body(await route(event('GET /resumes/{id}', 'a', { id }), svc))).toMatchObject({
+      status: 'ready',
+      reviewed: false,
+    });
+  });
+
+  it('confirming marks it reviewed and changes nothing else', async () => {
+    const { svc, repo } = setup();
+    const { id } = await ready(repo);
+    const r = body(
+      await route(event('PUT /resumes/{id}', 'a', { id, body: { reviewed: true } }), svc),
+    );
+    expect(r).toMatchObject({
+      reviewed: true,
+      text: TEXT,
+      label: 'Upload 1',
+      status: 'ready',
+      hasOriginal: true,
+    });
+  });
+
+  it('confirming twice is harmless', async () => {
+    const { svc, repo } = setup();
+    const { id } = await ready(repo);
+    await route(event('PUT /resumes/{id}', 'a', { id, body: { reviewed: true } }), svc);
+    const again = res(
+      await route(event('PUT /resumes/{id}', 'a', { id, body: { reviewed: true } }), svc),
+    );
+    expect(again.statusCode).toBe(200);
+    expect(body(again).reviewed).toBe(true);
+  });
+
+  it('editing and saving the text also marks it reviewed', async () => {
+    const { svc, repo } = setup();
+    const { id } = await ready(repo);
+    const fixed = `${TEXT}\nFixed a line the parser got wrong.`;
+    const r = body(
+      await route(event('PUT /resumes/{id}', 'a', { id, body: { text: fixed } }), svc),
+    );
+    expect(r).toMatchObject({ reviewed: true, text: fixed });
+  });
+
+  it('renaming alone does not count as reviewing', async () => {
+    const { svc, repo } = setup();
+    const { id } = await ready(repo);
+    const r = body(
+      await route(event('PUT /resumes/{id}', 'a', { id, body: { label: 'ML Engineer' } }), svc),
+    );
+    expect(r).toMatchObject({ label: 'ML Engineer', reviewed: false });
+  });
+
+  it('only the owner can confirm it', async () => {
+    const { svc, repo } = setup();
+    const { id } = await ready(repo);
+    expect(
+      res(await route(event('PUT /resumes/{id}', 'b', { id, body: { reviewed: true } }), svc))
+        .statusCode,
+    ).toBe(404);
+    expect(body(await route(event('GET /resumes/{id}', 'a', { id }), svc)).reviewed).toBe(false);
+  });
+
+  it('a pasted resume is reviewed from the start', async () => {
+    const { svc } = setup();
+    const { id } = await create(svc, 'a');
+    expect(body(await route(event('GET /resumes/{id}', 'a', { id }), svc)).reviewed).toBe(true);
+  });
+});

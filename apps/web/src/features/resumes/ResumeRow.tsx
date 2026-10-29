@@ -173,6 +173,9 @@ export function ResumeRow({
           </Link>
           {resume.isDefault && <Badge tone="accent">Default</Badge>}
           {resume.status === 'processing' && <Badge tone="caution">Processing</Badge>}
+          {resume.status === 'ready' && !resume.reviewed && (
+            <Badge tone="caution">Needs review</Badge>
+          )}
           {resume.status === 'failed' && <Badge tone="bad">Failed</Badge>}
         </div>
         <p className="text-sm text-slate-500 dark:text-slate-400">

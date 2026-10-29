@@ -93,7 +93,8 @@ export function EditResumePage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const resume = useResume(id);
+  // Keep checking while the file is still being read, so the page fills in by itself.
+  const resume = useResume(id, { poll: true });
   const update = useUpdateResume();
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -115,6 +116,35 @@ export function EditResumePage() {
       </div>
     );
   }
+
+  if (resume.data.status !== 'ready') {
+    return (
+      <div className="space-y-6">
+        <Back />
+        <h1 className="text-2xl font-semibold">Edit resume</h1>
+        <Card>
+          <p role="status" className="text-sm text-slate-600 dark:text-slate-400">
+            {resume.data.status === 'processing'
+              ? 'This file is still being read. This page updates when it is ready.'
+              : (resume.data.failureReason?.message ?? 'We could not read this file.')}
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
+  const needsReview = !resume.data.reviewed;
+
+  const confirm = async () => {
+    setError(null);
+    try {
+      await update.mutateAsync({ id: resume.data.id, body: { reviewed: true } });
+      toast({ title: 'Text confirmed', tone: 'good' });
+      leave(() => navigate('/resumes'));
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  };
 
   const save = async (values: ResumeFormValues, changed: ChangedFields) => {
     setError(null);
@@ -140,6 +170,27 @@ export function EditResumePage() {
     <div className="space-y-6">
       <Back />
       <h1 className="text-2xl font-semibold">Edit resume</h1>
+      {needsReview && (
+        <Card className="space-y-3 border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+          <p className="text-sm font-medium">
+            Check this against your original. This is what the AI reads.
+          </p>
+          <p className="text-sm text-slate-700 dark:text-slate-300">
+            Fix anything the file reader got wrong, then confirm. You can also save your edits,
+            which counts as confirming.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={() => void confirm()} loading={update.isPending} disabled={dirty}>
+              Confirm text is correct
+            </Button>
+            {dirty && (
+              <span className="text-sm text-slate-600 dark:text-slate-400">
+                Save your changes first.
+              </span>
+            )}
+          </div>
+        </Card>
+      )}
       <Card>
         <ResumeForm
           key={resume.data.id}

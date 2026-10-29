@@ -3,7 +3,8 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
+
+import { TestRouter } from '../../test/TestRouter';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '../../components/ui';
 import { ApiError } from '../../lib/api';
@@ -16,8 +17,12 @@ import { ApiKeyBanner } from './ApiKeyBanner';
 import { ApiKeyForm } from './ApiKeyForm';
 
 vi.mock('../auth/authClient', () => ({ authClient: { currentUser: vi.fn() } }));
-vi.mock('./apiKeyApi', () => ({ apiKeyApi: { status: vi.fn(), save: vi.fn(), test: vi.fn(), remove: vi.fn() } }));
-vi.mock('../profile/profileApi', () => ({ profileApi: { get: vi.fn(), update: vi.fn(), deleteAccount: vi.fn() } }));
+vi.mock('./apiKeyApi', () => ({
+  apiKeyApi: { status: vi.fn(), save: vi.fn(), test: vi.fn(), remove: vi.fn() },
+}));
+vi.mock('../profile/profileApi', () => ({
+  profileApi: { get: vi.fn(), update: vi.fn(), deleteAccount: vi.fn() },
+}));
 
 const keys = vi.mocked(apiKeyApi);
 const profiles = vi.mocked(profileApi);
@@ -29,7 +34,10 @@ const STALE = { configured: true, lastFour: 'wxyz', validatedAt: null };
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(authClient.currentUser).mockResolvedValue({ email: 'alex@example.com', name: 'Alex Example' });
+  vi.mocked(authClient.currentUser).mockResolvedValue({
+    email: 'alex@example.com',
+    name: 'Alex Example',
+  });
 });
 afterEach(cleanup);
 
@@ -37,11 +45,11 @@ function renderAt(ui: React.ReactNode, path = '/') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[path]}>
+      <TestRouter path={path}>
         <AuthProvider>
           <ToastProvider>{ui}</ToastProvider>
         </AuthProvider>
-      </MemoryRouter>
+      </TestRouter>
     </QueryClientProvider>,
   );
 }
@@ -61,7 +69,9 @@ describe('ApiKeyForm: no key yet', () => {
 
   it('shows the how-to guide with all six steps and a safe Get key link', async () => {
     renderAt(<ApiKeyForm guideOpen />);
-    const guide = (await screen.findByText('How to get your Anthropic API key')).closest('details')!;
+    const guide = (await screen.findByText('How to get your Anthropic API key')).closest(
+      'details',
+    )!;
     expect(within(guide).getAllByRole('listitem')).toHaveLength(6);
     const link = screen.getByRole('link', { name: /Get key/ });
     expect(link).toHaveAttribute('href', 'https://console.anthropic.com/settings/keys');
@@ -99,7 +109,13 @@ describe('ApiKeyForm: no key yet', () => {
   });
 
   it('shows the friendly server message when Anthropic rejects the key', async () => {
-    keys.save.mockRejectedValue(new ApiError(400, 'invalid_api_key', 'Your API key is invalid or revoked. Check it in Settings.'));
+    keys.save.mockRejectedValue(
+      new ApiError(
+        400,
+        'invalid_api_key',
+        'Your API key is invalid or revoked. Check it in Settings.',
+      ),
+    );
     const user = userEvent.setup();
     renderAt(<ApiKeyForm />);
     await typeKey(user);
@@ -109,12 +125,20 @@ describe('ApiKeyForm: no key yet', () => {
   });
 
   it('points to the Anthropic console when there is no credit', async () => {
-    keys.save.mockRejectedValue(new ApiError(402, 'no_credit', 'Your Anthropic account has no credit. Add credit in the Anthropic console.'));
+    keys.save.mockRejectedValue(
+      new ApiError(
+        402,
+        'no_credit',
+        'Your Anthropic account has no credit. Add credit in the Anthropic console.',
+      ),
+    );
     const user = userEvent.setup();
     renderAt(<ApiKeyForm />);
     await typeKey(user);
     await user.click(screen.getByRole('button', { name: 'Save' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Add credit in the Anthropic console');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Add credit in the Anthropic console',
+    );
   });
 
   it('calls onSaved after a successful save', async () => {
@@ -142,7 +166,13 @@ describe('ApiKeyForm: key saved', () => {
 
   it('flags a key that Anthropic rejects on test and refreshes its state', async () => {
     keys.status.mockResolvedValueOnce(OK).mockResolvedValue(STALE);
-    keys.test.mockRejectedValue(new ApiError(400, 'invalid_api_key', 'Your API key is invalid or revoked. Check it in Settings.'));
+    keys.test.mockRejectedValue(
+      new ApiError(
+        400,
+        'invalid_api_key',
+        'Your API key is invalid or revoked. Check it in Settings.',
+      ),
+    );
     const user = userEvent.setup();
     renderAt(<ApiKeyForm />);
     await user.click(await screen.findByRole('button', { name: 'Test connection' }));
@@ -184,14 +214,21 @@ describe('ApiKeyBanner', () => {
   it('asks for a key when none is saved', async () => {
     keys.status.mockResolvedValue(NONE);
     renderAt(<ApiKeyBanner />);
-    expect(await screen.findByRole('region', { name: 'API key notice' })).toHaveTextContent('Add your Anthropic API key');
-    expect(screen.getByRole('link', { name: 'Go to Settings' })).toHaveAttribute('href', '/settings');
+    expect(await screen.findByRole('region', { name: 'API key notice' })).toHaveTextContent(
+      'Add your Anthropic API key',
+    );
+    expect(screen.getByRole('link', { name: 'Go to Settings' })).toHaveAttribute(
+      'href',
+      '/settings',
+    );
   });
 
   it('warns when the key needs attention', async () => {
     keys.status.mockResolvedValue(STALE);
     renderAt(<ApiKeyBanner />);
-    expect(await screen.findByRole('region', { name: 'API key notice' })).toHaveTextContent('needs attention');
+    expect(await screen.findByRole('region', { name: 'API key notice' })).toHaveTextContent(
+      'needs attention',
+    );
   });
 
   it('stays hidden when the key is verified', async () => {

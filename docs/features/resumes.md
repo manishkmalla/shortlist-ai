@@ -1,6 +1,6 @@
 # Resume library
 
-Phase 2. Each user keeps up to 10 resumes of their own, with no built-in or sample data. This page covers the storage and API (paste-text create, edit, default, duplicate, delete). Uploading files (PDF, DOCX, TXT) and the My Resumes screen are documented as they land.
+Phase 2. Each user keeps up to 10 resumes of their own, with no built-in or sample data. This page covers the storage, the API (paste-text create, edit, default, duplicate, delete) and the My Resumes screens. Uploading files (PDF, DOCX, TXT) is documented when it lands. The term for a user's set of resumes is **Resume library** (see GLOSSARY.md); "My Resumes" is the screen.
 
 ## What a resume holds
 
@@ -11,6 +11,7 @@ Phase 2. Each user keeps up to 10 resumes of their own, with no built-in or samp
 | `text` | The resume text, 20 to 60,000 characters. The source of truth for prompts |
 | `status` | `processing`, `ready` or `failed`. Pasted resumes are `ready` immediately. Uploads (next slice) start as `processing` |
 | `source` | `paste` or `upload` |
+| `wordCount` | Computed by the server on each read, for the list. The text itself is never in the list |
 | `isDefault` | Exactly one resume is the default, once the user has any |
 | `reviewed` | False until the user has seen and accepted the text. Always true for pasted resumes. Editing the text, or confirming it, sets it |
 | `parentResumeId` | Reserved for tailored versions saved back to the library |
@@ -31,6 +32,23 @@ All routes need the Cognito ID token. Items live under `pk = USER#<sub>`, `sk = 
 | POST | `/resumes/{id}/duplicate` | none | 201 with the copy ("<label> (copy)", not default). 409 at 10 |
 
 Errors are `{ "error": { "code", "message" } }`. A resume that belongs to someone else is indistinguishable from one that does not exist (404).
+
+## Screens
+
+| Route | What it does |
+|---|---|
+| `/resumes` | The library. Each row shows the label, a **Default** badge, `Pasted · Updated 3 Oct · 1,400 words`, any notes, and a row menu: Edit text, Rename, Duplicate, Set as default, Delete. The header shows "N of 10 used". Empty state: "No resumes yet" with an add button |
+| `/resumes/new` | Add a resume by pasting text: label, optional notes, text. The first resume becomes the default, and the page says so |
+| `/resumes/{id}` | Edit label, notes and text with the same form |
+
+How it behaves:
+
+- **Limit:** at 10 of 10, "Add resume" and "Duplicate" are disabled with the message "Delete one to add another". The server enforces it too.
+- **Character count:** the editor shows `N / 60,000 characters` live. Over the limit, a message says by how many characters, and saving is refused. The text is never truncated.
+- **Edits send only what changed.** Renaming does not resend the text, and only a text change marks the resume reviewed.
+- **Unsaved changes:** leaving the editor by any route (sidebar, Cancel, browser back) asks "Discard your changes?" while the form has edits, and closing the tab triggers the browser prompt. After a successful save it does not ask. This needs a data router, so the app mounts under `createBrowserRouter` with a single splat route that holds the existing `<Routes>`.
+- **Delete** asks first. If the resume is the default, the dialog names the resume that will become the default (the most recently updated remaining one, matching the server rule).
+- **Onboarding:** the wizard's resume step uses the same form (without notes). See [Onboarding wizard](onboarding.md).
 
 ## Rules
 
@@ -63,6 +81,7 @@ None can scan the table, use KMS or call Cognito. No new resources: the table is
 
 ## Tests
 
+- **Web:** the list (empty state, rows, word counts, limit, set default, rename, duplicate, delete with the new default named, errors and retry), the add and edit screens (validation, live count, over-limit refusal, changed-fields-only updates, server errors, not found) and the unsaved-changes guard (sidebar, Cancel, Keep editing, Discard, no prompt when clean or after saving).
 - **Validation:** missing, blank and over-long labels, short and over-long text, unknown fields (including `userId` and `status`), malformed JSON, oversized bodies; text at exactly the limit is accepted.
 - **Limit:** ten allowed, the eleventh and a duplicate refused with a clear message, a slot freed by deleting, and one user's library not counting against another's.
 - **Isolation:** user B cannot list, read, change, set as default, duplicate or delete user A's resume, and A's data is unchanged afterwards; a default change for A does not touch B.

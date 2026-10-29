@@ -3,13 +3,15 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
+
+import { TestRouter } from './test/TestRouter';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { AuthProvider } from './features/auth/AuthProvider';
 import { authClient } from './features/auth/authClient';
 import { apiKeyApi } from './features/apiKey/apiKeyApi';
 import { profileApi } from './features/profile/profileApi';
+import { resumesApi } from './features/resumes/resumesApi';
 
 vi.mock('./features/auth/authClient', () => ({
   authClient: {
@@ -26,6 +28,17 @@ vi.mock('./features/auth/authClient', () => ({
 
 vi.mock('./features/profile/profileApi', () => ({
   profileApi: { get: vi.fn(), update: vi.fn(), deleteAccount: vi.fn() },
+}));
+
+vi.mock('./features/resumes/resumesApi', () => ({
+  resumesApi: {
+    list: vi.fn(),
+    get: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    remove: vi.fn(),
+    duplicate: vi.fn(),
+  },
 }));
 
 vi.mock('./features/apiKey/apiKeyApi', () => ({
@@ -59,6 +72,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   client.currentUser.mockResolvedValue(null);
   api.get.mockResolvedValue(profile);
+  vi.mocked(resumesApi.list).mockResolvedValue([]);
   keyApi.status.mockResolvedValue({
     configured: true,
     lastFour: 'wxyz',
@@ -72,11 +86,11 @@ function renderApp(path: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[path]}>
+      <TestRouter path={path}>
         <AuthProvider>
           <App />
         </AuthProvider>
-      </MemoryRouter>
+      </TestRouter>
     </QueryClientProvider>,
   );
 }

@@ -18,6 +18,8 @@ export class ResumeError extends Error {
   }
 }
 
+const countWords = (text: string) => (text.trim() === '' ? 0 : text.trim().split(/\s+/).length);
+
 const toSummary = (r: StoredResume): ResumeSummary => ({
   id: r.id,
   label: r.label,
@@ -27,6 +29,7 @@ const toSummary = (r: StoredResume): ResumeSummary => ({
   isDefault: r.isDefault,
   reviewed: r.reviewedAt !== null,
   textLength: r.text.length,
+  wordCount: countWords(r.text),
   ...(r.parentResumeId ? { parentResumeId: r.parentResumeId } : {}),
   createdAt: r.createdAt,
   updatedAt: r.updatedAt,

@@ -394,7 +394,7 @@ describe('reviewing an uploaded resume', () => {
     await user.click(await screen.findByRole('button', { name: 'Confirm text is correct' }));
     expect(api.update).toHaveBeenCalledExactlyOnceWith(ID, { reviewed: true });
     expect(await screen.findByRole('heading', { name: 'My Resumes' })).toBeInTheDocument();
-    expect(await screen.findByText('Text confirmed')).toBeInTheDocument();
+    expect(await screen.findByText('Resume marked as reviewed')).toBeInTheDocument();
     expect(screen.queryByText('Needs review')).not.toBeInTheDocument();
     expect(screen.queryByText('Discard your changes?')).not.toBeInTheDocument();
   });
@@ -404,8 +404,11 @@ describe('reviewing an uploaded resume', () => {
     const user = userEvent.setup();
     renderAt(`/resumes/${ID}`);
     await user.type(await screen.findByLabelText('Resume text'), ' more');
-    expect(screen.getByRole('button', { name: 'Confirm text is correct' })).toBeDisabled();
+    const confirm = screen.getByRole('button', { name: 'Confirm text is correct' });
+    expect(confirm).toBeDisabled();
     expect(screen.getByText(/Save your changes first/)).toBeInTheDocument();
+    // The reason is tied to the button, so assistive technology can announce it.
+    expect(confirm).toHaveAccessibleDescription('Save your changes first.');
   });
 
   it('saving edited text is the other way to finish the review', async () => {

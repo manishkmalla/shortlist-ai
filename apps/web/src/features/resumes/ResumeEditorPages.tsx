@@ -1,3 +1,4 @@
+import { needsReview } from '@shortlist-ai/shared';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
@@ -133,13 +134,13 @@ export function EditResumePage() {
     );
   }
 
-  const needsReview = !resume.data.reviewed;
+  const reviewing = needsReview(resume.data);
 
-  const confirm = async () => {
+  const markReviewed = async () => {
     setError(null);
     try {
       await update.mutateAsync({ id: resume.data.id, body: { reviewed: true } });
-      toast({ title: 'Text confirmed', tone: 'good' });
+      toast({ title: 'Resume marked as reviewed', tone: 'good' });
       leave(() => navigate('/resumes'));
     } catch (e) {
       setError(errorMessage(e));
@@ -170,21 +171,26 @@ export function EditResumePage() {
     <div className="space-y-6">
       <Back />
       <h1 className="text-2xl font-semibold">Edit resume</h1>
-      {needsReview && (
+      {reviewing && (
         <Card className="space-y-3 border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
           <p className="text-sm font-medium">
             Check this against your original. This is what the AI reads.
           </p>
           <p className="text-sm text-slate-700 dark:text-slate-300">
-            Fix anything the file reader got wrong, then confirm. You can also save your edits,
-            which counts as confirming.
+            Fix anything the file reader got wrong, then mark the text as reviewed. Saving your
+            edits also marks it as reviewed.
           </p>
           <div className="flex flex-wrap items-center gap-3">
-            <Button onClick={() => void confirm()} loading={update.isPending} disabled={dirty}>
+            <Button
+              onClick={() => void markReviewed()}
+              loading={update.isPending}
+              disabled={dirty}
+              aria-describedby={dirty ? 'review-hint' : undefined}
+            >
               Confirm text is correct
             </Button>
             {dirty && (
-              <span className="text-sm text-slate-600 dark:text-slate-400">
+              <span id="review-hint" className="text-sm text-slate-600 dark:text-slate-400">
                 Save your changes first.
               </span>
             )}

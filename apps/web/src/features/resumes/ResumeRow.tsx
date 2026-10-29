@@ -1,5 +1,5 @@
 import * as Menu from '@radix-ui/react-dropdown-menu';
-import type { ResumeSummary } from '@shortlist-ai/shared';
+import { needsReview, type ResumeSummary } from '@shortlist-ai/shared';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
@@ -173,9 +173,7 @@ export function ResumeRow({
           </Link>
           {resume.isDefault && <Badge tone="accent">Default</Badge>}
           {resume.status === 'processing' && <Badge tone="caution">Processing</Badge>}
-          {resume.status === 'ready' && !resume.reviewed && (
-            <Badge tone="caution">Needs review</Badge>
-          )}
+          {needsReview(resume) && <Badge tone="caution">Needs review</Badge>}
           {resume.status === 'failed' && <Badge tone="bad">Failed</Badge>}
         </div>
         <p className="text-sm text-slate-500 dark:text-slate-400">

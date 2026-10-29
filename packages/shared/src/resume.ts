@@ -144,3 +144,7 @@ export const uploadStartedSchema = z.object({
   upload: presignedUploadSchema,
 });
 export type UploadStarted = z.infer<typeof uploadStartedSchema>;
+
+/** A ready Resume whose text the user has not reviewed yet. Pasted Resumes are reviewed from the start. */
+export const needsReview = (resume: { status: ResumeStatus; reviewed: boolean }): boolean =>
+  resume.status === 'ready' && !resume.reviewed;

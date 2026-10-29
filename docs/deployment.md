@@ -56,6 +56,22 @@ Stack outputs are printed after deploy and can be re-read in CloudFormation. Cop
 
 Stateful resources (table, user pool) are retained and protected. Removing them requires manual steps by design.
 
+## Uploads stack
+
+`ShortlistAiUploads-<env>` holds the uploads bucket and the function that reads uploaded files. It depends on the Data and Web stacks, and the API stack depends on it, so a full deploy orders them correctly. The bucket is private, encrypted and **retained**, so deleting the stack leaves users' files behind by design. The function that reads new files can only read and delete under `uploads/` and read and update Resume items.
+
+After the first deploy, check uploads on the live environment:
+
+1. Sign in (on the site, or locally with `npm run dev`), add a resume with **Upload files**, and choose a short `.txt` file. It should go from Processing to Done, and appear in My Resumes.
+2. **The signed size and type** can only be proved against real storage. In the browser's network tab, copy the signed upload URL of a request, then try to break it with a file of a different size or type. Both must be refused with `403`:
+   ```
+   curl -i -X PUT -H "Content-Type: text/plain" --data-binary @bigger-than-declared.txt "<signed url>"
+   curl -i -X PUT -H "Content-Type: application/pdf" --data-binary @same-size.txt "<signed url>"
+   ```
+3. The bucket must not be public: `curl -i https://<bucket>.s3.ap-southeast-2.amazonaws.com/` returns `403`.
+
+CDK also creates a small helper that attaches the file-created notification. Its permissions are managed by CDK and are not part of the function-level rules above.
+
 ## Publishing the web app
 
 The infrastructure deploy does not upload the site. After building:

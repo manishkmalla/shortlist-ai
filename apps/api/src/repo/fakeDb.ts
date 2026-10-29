@@ -45,10 +45,21 @@ export function createFakeDb() {
       if (command instanceof UpdateCommand) {
         const k = command.input.Key as Item;
         const existing = items.get(id(k.pk, k.sk));
+        const values = command.input.ExpressionAttributeValues ?? {};
+        const names = command.input.ExpressionAttributeNames ?? {};
         if (!existing) throw conditionFailed();
+        if (
+          command.input.ConditionExpression?.includes('#expectedStatus') &&
+          existing.status !== values[':expectedStatus']
+        ) {
+          throw conditionFailed();
+        }
+        // Only the attributes named in the SET clause change; condition placeholders are not written.
         const updated: Item = { ...existing };
-        for (const [ref, attr] of Object.entries(command.input.ExpressionAttributeNames ?? {})) {
-          updated[attr] = command.input.ExpressionAttributeValues?.[`:${ref.slice(1)}`];
+        for (const [, ref, value] of (command.input.UpdateExpression ?? '').matchAll(
+          /(#\w+) = (:\w+)/g,
+        )) {
+          updated[names[ref!]!] = values[value!];
         }
         items.set(id(k.pk, k.sk), updated);
         return { Attributes: updated };

@@ -1,16 +1,34 @@
 import {
   MAX_RESUMES,
+  MAX_UPLOAD_BYTES,
+  ORIGINAL_CONTENT_TYPES,
+  UPLOADABLE_EXTENSIONS,
   type CreateResumeRequest,
+  type OriginalExtension,
+  type RequestUploadRequest,
   type Resume,
   type ResumeSummary,
   type UpdateResumeRequest,
+  type UploadStarted,
 } from '@shortlist-ai/shared';
+import { sanitiseFilename } from '../lib/filename';
+import { originalKey } from '../lib/objectKeys';
+import type { ObjectStore } from '../lib/objectStore';
 import type { ResumePatch, ResumeRepo, StoredResume } from '../repo/resumeRepo';
+
+/** How long the browser has to start sending the file. */
+const UPLOAD_EXPIRY_SECONDS = 300;
 
 /** Why a resume request was refused. The handler maps these to HTTP statuses. */
 export class ResumeError extends Error {
   constructor(
-    public readonly code: 'limit_reached' | 'not_found' | 'not_ready',
+    public readonly code:
+      | 'limit_reached'
+      | 'not_found'
+      | 'not_ready'
+      | 'unsupported_type'
+      | 'type_mismatch'
+      | 'file_too_large',
     message: string,
   ) {
     super(message);
@@ -48,6 +66,27 @@ const assertReady = (resume: StoredResume, action: string) => {
   }
 };
 
+/** The lower-case extension after the last dot of the last path segment, or an empty string. */
+const extensionOf = (filename: string) => {
+  const leaf = filename.split(/[\\/]/).pop() ?? '';
+  const dot = leaf.lastIndexOf('.');
+  return dot >= 0
+    ? leaf
+        .slice(dot + 1)
+        .trim()
+        .toLowerCase()
+    : '';
+};
+
+/** A readable default label: the file name without its path or extension, at most 80 characters. */
+const labelFromFilename = (filename: string) => {
+  const leaf = filename.split(/[\\/]/).pop() ?? '';
+  const dot = leaf.lastIndexOf('.');
+  // eslint-disable-next-line no-control-regex
+  const stem = (dot > 0 ? leaf.slice(0, dot) : leaf).replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  return stem.slice(0, 80).trim() || 'Resume';
+};
+
 const limitError = () =>
   new ResumeError(
     'limit_reached',
@@ -56,6 +95,7 @@ const limitError = () =>
 
 export function createResumeService(deps: {
   repo: ResumeRepo;
+  store: ObjectStore;
   newId: () => string;
   now?: () => Date;
 }) {
@@ -96,6 +136,55 @@ export function createResumeService(deps: {
       };
       await deps.repo.create(userId, resume);
       return toResume(resume);
+    },
+
+    /**
+     * Starts an upload: validates the file's name, size and type, creates the Resume as processing, and returns
+     * a short-lived permission to send exactly that file to storage. Reading the file happens later.
+     */
+    async requestUpload(userId: string, input: RequestUploadRequest): Promise<UploadStarted> {
+      const extension = extensionOf(input.filename);
+      if (!(UPLOADABLE_EXTENSIONS as readonly string[]).includes(extension)) {
+        const supported = UPLOADABLE_EXTENSIONS.map((e) => `.${e}`).join(', ');
+        throw new ResumeError(
+          'unsupported_type',
+          `That file type is not supported. You can upload ${supported} files, or paste your resume text instead.`,
+        );
+      }
+      const contentType = ORIGINAL_CONTENT_TYPES[extension as OriginalExtension];
+      const declared = input.contentType?.split(';')[0]?.trim().toLowerCase();
+      if (declared && declared !== contentType) {
+        throw new ResumeError('type_mismatch', "That file's type does not match its name.");
+      }
+      if (input.size > MAX_UPLOAD_BYTES) {
+        throw new ResumeError('file_too_large', 'That file is larger than 5 MB.');
+      }
+
+      const existing = await ensureRoom(userId);
+      const id = deps.newId();
+      const filename = sanitiseFilename(input.filename);
+      const upload = await deps.store.presignUpload(originalKey(userId, id, filename), {
+        contentType,
+        size: input.size,
+        expiresInSeconds: UPLOAD_EXPIRY_SECONDS,
+      });
+
+      const stamp = now();
+      const resume: StoredResume = {
+        id,
+        label: input.label ?? labelFromFilename(input.filename),
+        notes: '',
+        text: '',
+        status: 'processing',
+        source: 'upload',
+        isDefault: existing.length === 0,
+        reviewedAt: null,
+        original: { filename, size: input.size, contentType },
+        createdAt: stamp,
+        updatedAt: stamp,
+      };
+      await deps.repo.create(userId, resume);
+      return { resume: toSummary(resume), upload };
     },
 
     async duplicate(userId: string, id: string): Promise<Resume> {

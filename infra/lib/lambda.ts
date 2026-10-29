@@ -13,14 +13,16 @@ export function apiFunction(
   id: string,
   handlerFile: string,
   environment: Record<string, string>,
+  /** Functions that do real work (reading files) need more than the API defaults. */
+  options: { memorySize?: number; timeoutSeconds?: number } = {},
 ) {
   return new NodejsFunction(scope, id, {
     entry: fileURLToPath(new URL(handlerFile, handlersDir)),
     handler: 'handler',
     runtime: Runtime.NODEJS_22_X,
     architecture: Architecture.ARM_64,
-    memorySize: 256,
-    timeout: Duration.seconds(10),
+    memorySize: options.memorySize ?? 256,
+    timeout: Duration.seconds(options.timeoutSeconds ?? 10),
     logGroup: new LogGroup(scope, `${id}Logs`, {
       retention: RetentionDays.ONE_MONTH,
       removalPolicy: RemovalPolicy.DESTROY,

@@ -45,7 +45,7 @@ export function createFakeObjectStore() {
       return {
         url: `https://fake-storage.test/${key}?signed=upload`,
         method: 'PUT',
-        headers: { 'Content-Type': options.contentType, 'Content-Length': String(options.size) },
+        headers: { 'Content-Type': options.contentType },
         expiresInSeconds: options.expiresInSeconds,
       };
     },

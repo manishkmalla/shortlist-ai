@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CreateResumeRequest, UpdateResumeRequest } from '@shortlist-ai/shared';
 import { useAuth } from '../auth/AuthProvider';
+import { POLL_INTERVAL_MS } from './polling';
 import { resumesApi } from './resumesApi';
 
 export const resumesKey = ['resumes'] as const;
@@ -12,16 +13,22 @@ export function useResumes() {
     queryKey: resumesKey,
     queryFn: () => resumesApi.list(),
     enabled: status === 'signed-in',
+    // Files being read finish on their own, so keep checking until none are.
+    refetchInterval: (query) =>
+      query.state.data?.some((r) => r.status === 'processing') ? POLL_INTERVAL_MS : false,
   });
 }
 
-export function useResume(id: string | undefined) {
+export function useResume(id: string | undefined, options: { poll?: boolean } = {}) {
   const { status } = useAuth();
   return useQuery({
     queryKey: resumeKey(id ?? ''),
     queryFn: () => resumesApi.get(id!),
     enabled: status === 'signed-in' && Boolean(id),
     retry: false,
+    refetchInterval: options.poll
+      ? (query) => (query.state.data?.status === 'processing' ? POLL_INTERVAL_MS : false)
+      : false,
   });
 }
 

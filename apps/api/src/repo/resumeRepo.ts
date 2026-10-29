@@ -43,15 +43,23 @@ export const storedResumeSchema = z.object({
 export type StoredResume = z.infer<typeof storedResumeSchema>;
 
 export type ResumePatch = Partial<
-  Pick<StoredResume, 'label' | 'notes' | 'text' | 'reviewedAt' | 'updatedAt'>
+  Pick<StoredResume, 'label' | 'notes' | 'text' | 'reviewedAt' | 'updatedAt' | 'status' | 'failure'>
 >;
 
 export interface ResumeRepo {
   list(userId: string): Promise<StoredResume[]>;
   get(userId: string, id: string): Promise<StoredResume | null>;
   create(userId: string, resume: StoredResume): Promise<void>;
-  /** Returns null if the resume does not exist for this user. */
-  update(userId: string, id: string, patch: ResumePatch): Promise<StoredResume | null>;
+  /**
+   * Returns null if the resume does not exist for this user, or if `onlyIfStatus` is given and the resume is in a
+   * different status (so a late or repeated event cannot overwrite newer work).
+   */
+  update(
+    userId: string,
+    id: string,
+    patch: ResumePatch,
+    options?: { onlyIfStatus?: StoredResume['status'] },
+  ): Promise<StoredResume | null>;
   /** Atomically makes `id` the default and clears the flag on `clearIds`. False if any item is missing. */
   setDefault(userId: string, id: string, clearIds: string[], updatedAt: string): Promise<boolean>;
   delete(userId: string, id: string): Promise<void>;
@@ -97,17 +105,26 @@ export function createResumeRepo(db: Db, tableName: string): ResumeRepo {
       );
     },
 
-    async update(userId, id, patch) {
+    async update(userId, id, patch, options) {
       const fields = Object.entries(patch).filter(([, v]) => v !== undefined);
+      const onlyIfStatus = options?.onlyIfStatus;
       try {
         const out = await db.send(
           new UpdateCommand({
             TableName: tableName,
             Key: key(userId, id),
             UpdateExpression: `SET ${fields.map(([k]) => `#${k} = :${k}`).join(', ')}`,
-            ConditionExpression: 'attribute_exists(pk)',
-            ExpressionAttributeNames: Object.fromEntries(fields.map(([k]) => [`#${k}`, k])),
-            ExpressionAttributeValues: Object.fromEntries(fields.map(([k, v]) => [`:${k}`, v])),
+            ConditionExpression: onlyIfStatus
+              ? 'attribute_exists(pk) AND #expectedStatus = :expectedStatus'
+              : 'attribute_exists(pk)',
+            ExpressionAttributeNames: {
+              ...Object.fromEntries(fields.map(([k]) => [`#${k}`, k])),
+              ...(onlyIfStatus ? { '#expectedStatus': 'status' } : {}),
+            },
+            ExpressionAttributeValues: {
+              ...Object.fromEntries(fields.map(([k, v]) => [`:${k}`, v])),
+              ...(onlyIfStatus ? { ':expectedStatus': onlyIfStatus } : {}),
+            },
             ReturnValues: 'ALL_NEW',
           }),
         );

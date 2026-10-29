@@ -1,5 +1,7 @@
 import {
+  fileExtension,
   MAX_UPLOAD_BYTES,
+  ORIGINAL_CONTENT_TYPES,
   UPLOADABLE_EXTENSIONS,
   type PresignedUpload,
 } from '@shortlist-ai/shared';
@@ -9,8 +11,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '../../components/ui';
 import { errorMessage } from '../../lib/api';
 import { uploadFile } from '../../lib/uploader';
-import { resumesKey, useResume } from './hooks';
-import { resumesApi } from './resumesApi';
+import { resumesKey, useRequestUpload, useResume } from './hooks';
 
 type Phase = 'requesting' | 'uploading' | 'extracting';
 interface Working {
@@ -21,14 +22,15 @@ interface Working {
 }
 
 const supported = UPLOADABLE_EXTENSIONS.map((e) => `.${e}`).join(', ');
+/** What the file chooser offers: the extensions and content types we can read. */
+const accept = [
+  ...UPLOADABLE_EXTENSIONS.map((e) => `.${e}`),
+  ...UPLOADABLE_EXTENSIONS.map((e) => ORIGINAL_CONTENT_TYPES[e]),
+].join(',');
 
 /** Checks a chosen file before anything is sent. The server checks again, so this only saves the user a wait. */
 function problemWith(file: File): string | null {
-  const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
-  if (
-    !file.name.includes('.') ||
-    !(UPLOADABLE_EXTENSIONS as readonly string[]).includes(extension)
-  ) {
+  if (!(UPLOADABLE_EXTENSIONS as readonly string[]).includes(fileExtension(file.name))) {
     return `Only ${supported} files can be uploaded for now. You can also paste your resume text.`;
   }
   if (file.size === 0) return 'That file is empty.';
@@ -38,6 +40,7 @@ function problemWith(file: File): string | null {
 
 export function UploadPanel() {
   const queryClient = useQueryClient();
+  const requestUpload = useRequestUpload();
   const inputRef = useRef<HTMLInputElement>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [working, setWorking] = useState<Working | null>(null);
@@ -71,7 +74,7 @@ export function UploadPanel() {
     let upload: PresignedUpload;
     let resumeId: string;
     try {
-      const started = await resumesApi.requestUpload({
+      const started = await requestUpload.mutateAsync({
         filename: file.name,
         size: file.size,
         contentType: file.type,
@@ -84,7 +87,6 @@ export function UploadPanel() {
       return;
     }
 
-    void queryClient.invalidateQueries({ queryKey: resumesKey });
     setWorking({ filename: file.name, phase: 'uploading', progress: 0, resumeId });
     try {
       await uploadFile(upload, file, (progress) => setWorking((w) => (w ? { ...w, progress } : w)));
@@ -117,7 +119,7 @@ export function UploadPanel() {
         ref={inputRef}
         type="file"
         aria-label="Resume file"
-        accept=".txt,text/plain"
+        accept={accept}
         className="sr-only"
         tabIndex={-1}
         onChange={(e) => {

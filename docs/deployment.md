@@ -63,7 +63,7 @@ Stateful resources (table, user pool) are retained and protected. Removing them 
 After the first deploy, check uploads on the live environment:
 
 1. Sign in (on the site, or locally with `npm run dev`), add a resume with **Upload files**, and choose a short `.txt` file. It should go from Processing to Done, and appear in My Resumes.
-2. **The signed size and type** can only be proved against real storage. In the browser's network tab, copy the signed upload URL of a request, then try to break it with a file of a different size or type. Both must be refused with `403`:
+2. **The signed size and type** (the signed URL must also have no `x-amz-checksum-*` parameters) can only be proved against real storage. In the browser's network tab, copy the signed upload URL of a request, then try to break it with a file of a different size or type. Both must be refused with `403`:
    ```
    curl -i -X PUT -H "Content-Type: text/plain" --data-binary @bigger-than-declared.txt "<signed url>"
    curl -i -X PUT -H "Content-Type: application/pdf" --data-binary @same-size.txt "<signed url>"

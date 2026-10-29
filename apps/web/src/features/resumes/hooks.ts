@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CreateResumeRequest, UpdateResumeRequest } from '@shortlist-ai/shared';
+import type {
+  CreateResumeRequest,
+  RequestUploadRequest,
+  UpdateResumeRequest,
+} from '@shortlist-ai/shared';
 import { useAuth } from '../auth/AuthProvider';
 import { POLL_INTERVAL_MS } from './polling';
 import { resumesApi } from './resumesApi';
@@ -37,6 +41,17 @@ export function useCreateResume() {
   return useMutation({
     mutationFn: (body: CreateResumeRequest) => resumesApi.create(body),
     onSuccess: () => qc.invalidateQueries({ queryKey: resumesKey }),
+  });
+}
+
+/** Starts an upload: creates the Resume as processing and returns the signed upload. */
+export function useRequestUpload() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: RequestUploadRequest) => resumesApi.requestUpload(body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: resumesKey });
+    },
   });
 }
 

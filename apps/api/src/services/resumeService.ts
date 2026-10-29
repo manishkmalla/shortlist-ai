@@ -1,4 +1,5 @@
 import {
+  fileExtension,
   MAX_RESUMES,
   MAX_UPLOAD_BYTES,
   ORIGINAL_CONTENT_TYPES,
@@ -66,18 +67,6 @@ const assertReady = (resume: StoredResume, action: string) => {
   }
 };
 
-/** The lower-case extension after the last dot of the last path segment, or an empty string. */
-const extensionOf = (filename: string) => {
-  const leaf = filename.split(/[\\/]/).pop() ?? '';
-  const dot = leaf.lastIndexOf('.');
-  return dot >= 0
-    ? leaf
-        .slice(dot + 1)
-        .trim()
-        .toLowerCase()
-    : '';
-};
-
 /** A readable default label: the file name without its path or extension, at most 80 characters. */
 const labelFromFilename = (filename: string) => {
   const leaf = filename.split(/[\\/]/).pop() ?? '';
@@ -143,7 +132,7 @@ export function createResumeService(deps: {
      * a short-lived permission to send exactly that file to storage. Reading the file happens later.
      */
     async requestUpload(userId: string, input: RequestUploadRequest): Promise<UploadStarted> {
-      const extension = extensionOf(input.filename);
+      const extension = fileExtension(input.filename);
       if (!(UPLOADABLE_EXTENSIONS as readonly string[]).includes(extension)) {
         const supported = UPLOADABLE_EXTENSIONS.map((e) => `.${e}`).join(', ');
         throw new ResumeError(

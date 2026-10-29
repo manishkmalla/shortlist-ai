@@ -103,6 +103,18 @@ export const ORIGINAL_CONTENT_TYPES = {
 export type OriginalExtension = keyof typeof ORIGINAL_CONTENT_TYPES;
 export const ORIGINAL_EXTENSIONS = Object.keys(ORIGINAL_CONTENT_TYPES) as OriginalExtension[];
 
+/** The lower-case extension of the last path segment of a file name, or an empty string when there is none. */
+export const fileExtension = (filename: string): string => {
+  const leaf = filename.split(/[\\/]/).pop() ?? '';
+  const dot = leaf.lastIndexOf('.');
+  return dot >= 0
+    ? leaf
+        .slice(dot + 1)
+        .trim()
+        .toLowerCase()
+    : '';
+};
+
 /** The types that can be uploaded today. Later tickets add `pdf` and `docx` here once they can be read. */
 export const UPLOADABLE_EXTENSIONS: readonly OriginalExtension[] = ['txt'];
 

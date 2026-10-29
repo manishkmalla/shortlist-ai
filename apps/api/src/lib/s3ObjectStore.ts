@@ -15,7 +15,12 @@ const isMissing = (e: unknown) =>
 /** The uploads bucket. Keys come from objectKeys.ts, never from client input. */
 export function createS3ObjectStore(
   bucket: string,
-  client: S3Client = new S3Client({}),
+  // The SDK adds a checksum by default. For a presigned upload that would be the checksum of an empty body,
+  // and storage would reject every real file. Only add checksums when an operation requires one.
+  client: S3Client = new S3Client({
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
+  }),
 ): ObjectStore {
   return {
     async put(key, body, contentType) {

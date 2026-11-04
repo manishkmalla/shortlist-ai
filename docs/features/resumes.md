@@ -102,6 +102,17 @@ It is safe to run twice: a Resume that is no longer `processing` is left alone, 
 
 **Local development:** the development bucket also allows uploads from `http://localhost:5173`, so `npm run dev` can upload against the deployed environment. Production allows the CloudFront origin only. The API's own CORS is unchanged.
 
+## Reviewing an uploaded resume
+
+Text read from a file can be wrong, and it is what the AI reads, so an uploaded Resume must be **reviewed** before it can be used (see the glossary). A pasted Resume is reviewed from the start, because the user typed or pasted it themselves.
+
+- **Needs review.** In My Resumes, a ready upload that has not been reviewed shows a **Needs review** badge next to its label. The badge is not shown for pasted Resumes, reviewed uploads, files still being read, or files that could not be read.
+- **The review page** (`/resumes/{id}`) shows the extracted text in the editor, with the note "Check this against your original. This is what the AI reads." and a **Confirm text is correct** button.
+- **Two ways to finish.** The **Confirm text is correct** button marks the Resume reviewed without sending any text (`PUT { reviewed: true }`), and shows "Resume marked as reviewed". Editing the text and saving also counts, as does any text change. Renaming alone does not. After either, the badge disappears and the page returns to the list.
+- **Unsaved edits.** Confirm is disabled while the editor has unsaved changes ("Save your changes first."), so the user can never confirm text they are not looking at.
+- **Not ready.** For a file still being read, the page says so and fills in by itself when reading finishes (it checks every two seconds). For a file that could not be read, it shows the reason. Neither offers Confirm, and the server refuses it anyway (`409 not_ready`). Fixing a failed upload by pasting text is a later ticket.
+- **Using a Resume.** The rule that an Analysis refuses an unreviewed Resume belongs to the Analysis stage (Phase 3). This page only makes sure the flag is accurate.
+
 ## Rules
 
 - **Limit:** 10 resumes per user. Create and duplicate both check it. The check is not atomic, so two simultaneous requests could briefly exceed it. That is harmless and bounded by the API throttle.

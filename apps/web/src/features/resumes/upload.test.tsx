@@ -336,3 +336,148 @@ describe('My Resumes while a file is being read', () => {
     expect(await screen.findByText('Failed')).toBeInTheDocument();
   });
 });
+
+const readyUnreviewed = (over: Partial<Resume> = {}): Resume =>
+  full({
+    status: 'ready',
+    reviewed: false,
+    text: TEXT,
+    textLength: TEXT.length,
+    wordCount: 13,
+    ...over,
+  });
+
+describe('Needs review in My Resumes', () => {
+  const listWith = (...items: Partial<ResumeSummary>[]) =>
+    api.list.mockResolvedValue(
+      items.map((over, i) =>
+        summary({ id: `00000000-0000-4000-8000-00000000010${i}`, label: `R${i}`, ...over }),
+      ),
+    );
+
+  it('marks a ready upload that has not been reviewed', async () => {
+    listWith({ status: 'ready', reviewed: false, textLength: 90, wordCount: 13 });
+    renderAt('/resumes');
+    expect(await screen.findByText('Needs review')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['a reviewed upload', { status: 'ready', reviewed: true }],
+    ['a pasted resume', { status: 'ready', reviewed: true, source: 'paste', hasOriginal: false }],
+    ['a file still being read', { status: 'processing', reviewed: false }],
+    ['a file that could not be read', { status: 'failed', reviewed: false }],
+  ] as const)('does not mark %s', async (_name, over) => {
+    listWith({ ...over, textLength: 90, wordCount: 13 });
+    renderAt('/resumes');
+    await screen.findByText(/Updated/);
+    expect(screen.queryByText('Needs review')).not.toBeInTheDocument();
+  });
+});
+
+describe('reviewing an uploaded resume', () => {
+  const NOTE = 'Check this against your original. This is what the AI reads.';
+
+  it('shows the extracted text with a note and a Confirm button', async () => {
+    api.get.mockResolvedValue(readyUnreviewed());
+    renderAt(`/resumes/${ID}`);
+    expect(await screen.findByLabelText('Resume text')).toHaveValue(TEXT);
+    expect(screen.getByText(NOTE)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirm text is correct' })).toBeEnabled();
+  });
+
+  it('confirming marks it reviewed without sending any text, then returns to the list', async () => {
+    api.get.mockResolvedValue(readyUnreviewed());
+    api.update.mockResolvedValue(readyUnreviewed({ reviewed: true }));
+    api.list.mockResolvedValue([summary({ status: 'ready', reviewed: true })]);
+    const user = userEvent.setup();
+    renderAt(`/resumes/${ID}`);
+    await user.click(await screen.findByRole('button', { name: 'Confirm text is correct' }));
+    expect(api.update).toHaveBeenCalledExactlyOnceWith(ID, { reviewed: true });
+    expect(await screen.findByRole('heading', { name: 'My Resumes' })).toBeInTheDocument();
+    expect(await screen.findByText('Resume marked as reviewed')).toBeInTheDocument();
+    expect(screen.queryByText('Needs review')).not.toBeInTheDocument();
+    expect(screen.queryByText('Discard your changes?')).not.toBeInTheDocument();
+  });
+
+  it('cannot confirm text that has unsaved edits, and says why', async () => {
+    api.get.mockResolvedValue(readyUnreviewed());
+    const user = userEvent.setup();
+    renderAt(`/resumes/${ID}`);
+    await user.type(await screen.findByLabelText('Resume text'), ' more');
+    const confirm = screen.getByRole('button', { name: 'Confirm text is correct' });
+    expect(confirm).toBeDisabled();
+    expect(screen.getByText(/Save your changes first/)).toBeInTheDocument();
+    // The reason is tied to the button, so assistive technology can announce it.
+    expect(confirm).toHaveAccessibleDescription('Save your changes first.');
+  });
+
+  it('saving edited text is the other way to finish the review', async () => {
+    api.get.mockResolvedValue(readyUnreviewed());
+    api.update.mockResolvedValue(readyUnreviewed({ reviewed: true, text: `${TEXT} fixed` }));
+    api.list.mockResolvedValue([summary({ status: 'ready', reviewed: true })]);
+    const user = userEvent.setup();
+    renderAt(`/resumes/${ID}`);
+    await user.type(await screen.findByLabelText('Resume text'), ' fixed');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(api.update).toHaveBeenCalledExactlyOnceWith(ID, { text: `${TEXT} fixed` });
+    expect(await screen.findByRole('heading', { name: 'My Resumes' })).toBeInTheDocument();
+  });
+
+  it('shows the server message if confirming is refused, and stays on the page', async () => {
+    api.get.mockResolvedValue(readyUnreviewed());
+    api.update.mockRejectedValue(
+      new ApiError(
+        409,
+        'not_ready',
+        'This resume is not ready yet, so it cannot be marked as reviewed or have its text edited.',
+      ),
+    );
+    const user = userEvent.setup();
+    renderAt(`/resumes/${ID}`);
+    await user.click(await screen.findByRole('button', { name: 'Confirm text is correct' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('not ready yet');
+    expect(screen.getByRole('heading', { name: 'Edit resume' })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['an upload that was already reviewed', readyUnreviewed({ reviewed: true })],
+    ['a pasted resume', readyUnreviewed({ reviewed: true, source: 'paste', hasOriginal: false })],
+  ])('offers no review for %s', async (_name, resume) => {
+    api.get.mockResolvedValue(resume);
+    renderAt(`/resumes/${ID}`);
+    await screen.findByLabelText('Resume text');
+    expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Confirm text is correct' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('offers no review while the file is still being read, and picks it up when it is ready', async () => {
+    api.get.mockResolvedValueOnce(full()).mockResolvedValue(readyUnreviewed());
+    renderAt(`/resumes/${ID}`);
+    expect(await screen.findByText(/still being read/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Confirm text is correct' }),
+    ).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: 'Confirm text is correct' }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Resume text')).toHaveValue(TEXT);
+  });
+
+  it('offers no review for a file that could not be read, and shows why', async () => {
+    api.get.mockResolvedValue(
+      full({
+        status: 'failed',
+        failureReason: { code: 'wrong_type', message: 'This file does not look like a text file.' },
+      }),
+    );
+    renderAt(`/resumes/${ID}`);
+    expect(
+      await screen.findByText('This file does not look like a text file.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Confirm text is correct' }),
+    ).not.toBeInTheDocument();
+  });
+});

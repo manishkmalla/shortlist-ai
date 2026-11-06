@@ -841,3 +841,91 @@ describe('reviewing an uploaded resume', () => {
     expect(body(await route(event('GET /resumes/{id}', 'a', { id }), svc)).reviewed).toBe(true);
   });
 });
+
+describe('deleting a resume removes its Original', () => {
+  const upload = async (
+    svc: Svc,
+    storage: ReturnType<typeof setup>['storage'],
+    sub: string,
+    name = 'cv.txt',
+  ) => {
+    const started = body(
+      await route(
+        event('POST /resumes/upload-url', sub, { body: { filename: name, size: 20 } }),
+        svc,
+      ),
+    );
+    const { key } = storage.uploads[storage.uploads.length - 1]!;
+    await storage.store.put(key, new TextEncoder().encode('resume text here'), 'text/plain');
+    return { id: started.resume.id as string, key };
+  };
+  const remove = (svc: Svc, sub: string, id: string) =>
+    route(event('DELETE /resumes/{id}', sub, { id }), svc);
+
+  it('deletes the file together with the resume', async () => {
+    const { svc, storage } = setup();
+    const { id, key } = await upload(svc, storage, 'a');
+    expect(res(await remove(svc, 'a', id)).statusCode).toBe(204);
+    expect(await storage.store.head(key)).toBeNull();
+    expect(res(await route(event('GET /resumes/{id}', 'a', { id }), svc)).statusCode).toBe(404);
+  });
+
+  it("leaves the user's other files, and other users' files, alone", async () => {
+    const { svc, storage } = setup();
+    const one = await upload(svc, storage, 'a', 'one.txt');
+    const two = await upload(svc, storage, 'a', 'two.txt');
+    const theirs = await upload(svc, storage, 'b', 'one.txt');
+    await remove(svc, 'a', one.id);
+    expect(await storage.store.head(one.key)).toBeNull();
+    expect(await storage.store.head(two.key)).not.toBeNull();
+    expect(await storage.store.head(theirs.key)).not.toBeNull();
+  });
+
+  it('works when the file was never uploaded', async () => {
+    const { svc, storage } = setup();
+    const started = body(
+      await route(
+        event('POST /resumes/upload-url', 'a', { body: { filename: 'cv.txt', size: 20 } }),
+        svc,
+      ),
+    );
+    expect(storage.objects.size).toBe(0);
+    expect(res(await remove(svc, 'a', started.resume.id)).statusCode).toBe(204);
+  });
+
+  it('a pasted resume has no file, and deleting it does not touch storage', async () => {
+    const { svc, storage } = setup();
+    const { id } = await create(svc, 'a');
+    const spy = vi.spyOn(storage.store, 'delete');
+    expect(res(await remove(svc, 'a', id)).statusCode).toBe(204);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('another user cannot delete it, and the file stays', async () => {
+    const { svc, storage } = setup();
+    const { id, key } = await upload(svc, storage, 'a');
+    expect(res(await remove(svc, 'b', id)).statusCode).toBe(404);
+    expect(await storage.store.head(key)).not.toBeNull();
+    expect(res(await route(event('GET /resumes/{id}', 'a', { id }), svc)).statusCode).toBe(200);
+  });
+
+  it('if the file cannot be removed, the resume stays and a retry finishes the job', async () => {
+    const { svc, storage } = setup();
+    const { id, key } = await upload(svc, storage, 'a');
+    vi.spyOn(storage.store, 'delete').mockRejectedValueOnce(new Error('storage down'));
+    await expect(remove(svc, 'a', id)).rejects.toThrow('storage down');
+    expect(res(await route(event('GET /resumes/{id}', 'a', { id }), svc)).statusCode).toBe(200);
+    expect(await storage.store.head(key)).not.toBeNull();
+
+    expect(res(await remove(svc, 'a', id)).statusCode).toBe(204);
+    expect(await storage.store.head(key)).toBeNull();
+  });
+
+  it('deleting the default upload still promotes another resume', async () => {
+    const { svc, storage } = setup();
+    const first = await upload(svc, storage, 'a', 'one.txt');
+    const second = await create(svc, 'a', 'Second');
+    await remove(svc, 'a', first.id);
+    expect((await listFor(svc, 'a'))[0]).toMatchObject({ id: second.id, isDefault: true });
+  });
+});

@@ -79,6 +79,17 @@ export class ApiStack extends Stack {
         new PolicyStatement({ effect: Effect.ALLOW, actions, resources: [props.apiKeyKey.keyArn] }),
       );
 
+    // Deleting files is allowed only under the uploads prefix. Two functions get it: deleting a Resume and
+    // deleting an account.
+    const allowDeleteUploads = (fn: ReturnType<typeof route>) =>
+      fn.addToRolePolicy(
+        new PolicyStatement({
+          effect: Effect.ALLOW,
+          actions: ['s3:DeleteObject'],
+          resources: [props.uploadsBucket.arnForObjects('uploads/*')],
+        }),
+      );
+
     // One function per verb so each gets only the permissions it needs.
     props.table.grant(
       route('GetMe', 'profile.ts', HttpMethod.GET, '/me'),
@@ -101,6 +112,17 @@ export class ApiStack extends Stack {
         resources: [props.userPool.userPoolArn],
       }),
     );
+    // Deleting an account removes every file the user uploaded: list them (only under the uploads prefix), then
+    // delete them. Listing is a bucket-level permission, narrowed with a condition on the prefix.
+    deleteMe.addToRolePolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ['s3:ListBucket'],
+        resources: [props.uploadsBucket.bucketArn],
+        conditions: { StringLike: { 's3:prefix': ['uploads/*'] } },
+      }),
+    );
+    allowDeleteUploads(deleteMe);
 
     // Anthropic API key (BYOK). Only the test function can decrypt; saving only creates data keys.
     const keyPath = '/settings/api-key';
@@ -142,13 +164,16 @@ export class ApiStack extends Stack {
       'dynamodb:Query',
       'dynamodb:UpdateItem',
     );
+    const deleteResume = route('DeleteResume', 'resumes.ts', HttpMethod.DELETE, '/resumes/{id}');
     props.table.grant(
-      route('DeleteResume', 'resumes.ts', HttpMethod.DELETE, '/resumes/{id}'),
+      deleteResume,
       'dynamodb:GetItem',
       'dynamodb:Query',
       'dynamodb:DeleteItem',
       'dynamodb:UpdateItem',
     );
+    // Deleting a Resume deletes its uploaded file. It knows the exact key, so it needs no listing.
+    allowDeleteUploads(deleteResume);
     props.table.grant(
       route('DuplicateResume', 'resumes.ts', HttpMethod.POST, '/resumes/{id}/duplicate'),
       'dynamodb:GetItem',

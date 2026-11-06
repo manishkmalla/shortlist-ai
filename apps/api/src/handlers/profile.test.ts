@@ -1,5 +1,8 @@
 import type { APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
 import { describe, expect, it, vi } from 'vitest';
+import { createFakeObjectStore } from '../lib/fakeObjectStore';
+import { originalKey } from '../lib/objectKeys';
+import { createUserFiles } from '../lib/userFiles';
 import { createFakeDb } from '../repo/fakeDb';
 import { createProfileRepo } from '../repo/profileRepo';
 import { createProfileService } from '../services/profileService';
@@ -7,7 +10,8 @@ import type { ApiEvent } from '../lib/http';
 import { route } from './profile';
 
 function setup() {
-  const { db } = createFakeDb();
+  const { db, items } = createFakeDb();
+  const storage = createFakeObjectStore();
   const repo = createProfileRepo(db, 't');
   const deleteUser = vi.fn().mockResolvedValue(undefined);
   /** Users whose Anthropic key has passed a check. */
@@ -16,10 +20,11 @@ function setup() {
     repo,
     hasVerifiedKey: async (userId) => verified.has(userId),
     identity: { deleteUser },
+    files: createUserFiles(storage.store),
     defaultModelId: 'claude-sonnet-5-5',
     now: () => new Date('2026-01-01T00:00:00.000Z'),
   });
-  return { svc, deleteUser, repo, verified };
+  return { svc, deleteUser, repo, verified, items, storage };
 }
 
 function event(method: string, sub: string, body?: unknown): ApiEvent {
@@ -253,5 +258,110 @@ describe('accounts created before onboarding existed', () => {
     await route(event('GET', 'a'), svc);
     verified.add('a');
     expect(parsed(await route(event('GET', 'a'), svc)).onboardingCompletedAt).toBeNull();
+  });
+});
+
+describe('deleting an account removes the uploaded files too', () => {
+  const RESUME = '00000000-0000-4000-8000-000000000001';
+  const OTHER = '00000000-0000-4000-8000-000000000002';
+  const del = (sub: string) => event('DELETE', sub);
+  const put = (
+    storage: ReturnType<typeof setup>['storage'],
+    userId: string,
+    id: string,
+    name = 'cv.txt',
+  ) => storage.store.put(originalKey(userId, id, name), new TextEncoder().encode('resume text'));
+
+  it("removes every one of the user's files, but nothing that belongs to anyone else", async () => {
+    const { svc, storage } = setup();
+    await route(event('GET', 'a'), svc);
+    await route(event('GET', 'b'), svc);
+    await put(storage, 'a', RESUME);
+    await put(storage, 'a', OTHER, 'second.txt');
+    await put(storage, 'b', RESUME);
+    expect(asResult(await route(del('a'), svc)).statusCode).toBe(204);
+    expect(await storage.store.list('uploads/a/')).toEqual([]);
+    expect(await storage.store.list('uploads/b/')).toHaveLength(1);
+    expect(parsed(await route(event('GET', 'b'), svc)).name).toBe('User b');
+  });
+
+  it('does not match another user whose id starts the same way', async () => {
+    const { svc, storage } = setup();
+    await route(event('GET', 'a'), svc);
+    await put(storage, 'a', RESUME);
+    await put(storage, 'ab', RESUME);
+    await route(del('a'), svc);
+    expect(await storage.store.list('uploads/ab/')).toHaveLength(1);
+  });
+
+  it('works for a user who never uploaded anything', async () => {
+    const { svc } = setup();
+    await route(event('GET', 'a'), svc);
+    expect(asResult(await route(del('a'), svc)).statusCode).toBe(204);
+  });
+
+  it('goes in order: files first, then the data, then the login', async () => {
+    const { svc, storage, items, deleteUser } = setup();
+    await route(event('GET', 'a'), svc);
+    await put(storage, 'a', RESUME);
+    // What is left at the moment each step runs.
+    const left = () => ({ files: storage.objects.size, data: items.size });
+    const atFirstFileDelete: { files: number; data: number }[] = [];
+    const atLoginDelete: { files: number; data: number }[] = [];
+    const realDelete = storage.store.delete.bind(storage.store);
+    vi.spyOn(storage.store, 'delete').mockImplementation(async (key) => {
+      atFirstFileDelete.push(left());
+      await realDelete(key);
+    });
+    deleteUser.mockImplementation(async () => {
+      atLoginDelete.push(left());
+    });
+    await route(del('a'), svc);
+    expect(atFirstFileDelete).toEqual([{ files: 1, data: 1 }]); // data still there while files go
+    expect(atLoginDelete).toEqual([{ files: 0, data: 0 }]); // everything else gone before the login
+  });
+
+  it('if removing the data fails, the login is left alone and a retry finishes the job', async () => {
+    const { svc, storage, repo, deleteUser } = setup();
+    await route(event('GET', 'a'), svc);
+    await put(storage, 'a', RESUME);
+    vi.spyOn(repo, 'deleteAll').mockRejectedValueOnce(new Error('database down'));
+    await expect(route(del('a'), svc)).rejects.toThrow('database down');
+    expect(deleteUser).not.toHaveBeenCalled();
+    expect(asResult(await route(del('a'), svc)).statusCode).toBe(204);
+    expect(deleteUser).toHaveBeenCalledOnce();
+  });
+
+  it('if removing the files fails, nothing else is touched and a retry finishes the job', async () => {
+    const { svc, storage, deleteUser } = setup();
+    await route(event('GET', 'a'), svc);
+    await put(storage, 'a', RESUME);
+    vi.spyOn(storage.store, 'delete').mockRejectedValueOnce(new Error('storage down'));
+    await expect(route(del('a'), svc)).rejects.toThrow('storage down');
+    expect(deleteUser).not.toHaveBeenCalled();
+    expect(parsed(await route(event('GET', 'a'), svc)).name).toBe('User a');
+    expect(await storage.store.list('uploads/a/')).toHaveLength(1);
+
+    expect(asResult(await route(del('a'), svc)).statusCode).toBe(204);
+    expect(await storage.store.list('uploads/a/')).toEqual([]);
+    expect(deleteUser).toHaveBeenCalledOnce();
+  });
+
+  it('if removing the login fails after the rest is gone, a retry still succeeds', async () => {
+    const { svc, storage, deleteUser } = setup();
+    await route(event('GET', 'a'), svc);
+    await put(storage, 'a', RESUME);
+    deleteUser.mockRejectedValueOnce(new Error('cognito down'));
+    await expect(route(del('a'), svc)).rejects.toThrow('cognito down');
+    expect(asResult(await route(del('a'), svc)).statusCode).toBe(204);
+    expect(deleteUser).toHaveBeenCalledTimes(2);
+  });
+
+  it('removes files that are no longer tied to any Resume record', async () => {
+    const { svc, storage } = setup();
+    await route(event('GET', 'a'), svc);
+    await put(storage, 'a', '00000000-0000-4000-8000-0000000000aa', 'stray.txt');
+    await route(del('a'), svc);
+    expect(await storage.store.list('uploads/')).toEqual([]);
   });
 });

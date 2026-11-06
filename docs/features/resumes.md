@@ -120,11 +120,12 @@ Text read from a file can be wrong, and it is what the AI reads, so an uploaded 
 - **Ownership:** the user ID comes only from the token. Ids in paths must be UUIDs, and anything else is a 404.
 - **Body size:** requests over 250 KB are rejected.
 - **Privacy:** logs contain error class names and IDs only, never resume text, labels or notes.
-- **Deleting an account** removes every item under the user's partition, resumes included. Uploaded files are added to that flow in the upload slice.
+- **Deleting a Resume** also deletes its Original (the uploaded file). The file goes first: if that fails, the Resume is still there and the delete can simply be tried again; the other way round could leave a file that nothing points to. A Resume that has no file (pasted, or an upload that never arrived) deletes as before.
+- **Deleting an account** removes, in this order, every file under the user's own prefix, then every item under the user's partition (resumes included), then the login. A failure at any step stops the rest and leaves the account usable, and every step is safe to repeat, so a retry finishes the job. Files are found by listing the user's prefix, so even a file whose Resume record is gone is removed.
 
 ## Infrastructure
 
-Six functions, one per route, sharing one handler (`apps/api/src/handlers/resumes.ts`) and each holding only the DynamoDB actions its code path needs:
+One function per route, sharing one handler (`apps/api/src/handlers/resumes.ts`) and each holding only the DynamoDB actions its code path needs:
 
 | Function | Actions |
 |---|---|
@@ -134,7 +135,7 @@ Six functions, one per route, sharing one handler (`apps/api/src/handlers/resume
 | `RequestUpload` | `Query`, `PutItem`, and `s3:PutObject` on `uploads/*` only. The only function that can write files |
 | `DuplicateResume` | `GetItem`, `Query`, `PutItem` |
 | `UpdateResume` | `GetItem`, `Query`, `UpdateItem` (the default switch is a transaction of updates) |
-| `DeleteResume` | `GetItem`, `Query`, `DeleteItem`, `UpdateItem` |
+| `DeleteResume` | `GetItem`, `Query`, `DeleteItem`, `UpdateItem`, and `s3:DeleteObject` on `uploads/*` only |
 
 None can scan the table, use KMS or call Cognito. No new resources: the table is the Phase 1 single table.
 

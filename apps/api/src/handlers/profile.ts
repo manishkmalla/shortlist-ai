@@ -1,6 +1,8 @@
 import type { APIGatewayProxyHandlerV2WithJWTAuthorizer } from 'aws-lambda';
 import { modelIdSchema, updateProfileRequestSchema } from '@shortlist-ai/shared';
 import { createIdentityAdmin } from '../lib/identity';
+import { createS3ObjectStore } from '../lib/s3ObjectStore';
+import { createUserFiles } from '../lib/userFiles';
 import { errorResponse, identityFrom, json, parseBody, type ApiEvent } from '../lib/http';
 import { logger } from '../lib/logger';
 import { createDb } from '../repo/db';
@@ -16,6 +18,7 @@ function service(): ProfileService {
     repo: createProfileRepo(db, table),
     hasVerifiedKey: async (userId) => Boolean((await secrets.get(userId))?.validatedAt),
     identity: createIdentityAdmin(process.env.USER_POOL_ID ?? ''),
+    files: createUserFiles(createS3ObjectStore(process.env.BUCKET_NAME ?? '')),
     // Config, not code. Fails fast if DEFAULT_MODEL_ID is missing or not on the allow-list.
     defaultModelId: modelIdSchema.parse(process.env.DEFAULT_MODEL_ID),
   });

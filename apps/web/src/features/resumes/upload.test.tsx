@@ -481,3 +481,120 @@ describe('reviewing an uploaded resume', () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe('fixing a failed upload', () => {
+  const REASON = 'No readable text was found in this file. Paste your resume text instead.';
+  const failed = (over: Partial<Resume> = {}): Resume =>
+    full({
+      status: 'failed',
+      failureReason: { code: 'no_readable_text', message: REASON },
+      ...over,
+    });
+
+  it('the list shows why it failed, with a Fix link, and only for failed uploads', async () => {
+    api.list.mockResolvedValue([
+      summary({
+        id: ID,
+        label: 'bad',
+        status: 'failed',
+        failureReason: { code: 'no_readable_text', message: REASON },
+      }),
+      summary({
+        id: '00000000-0000-4000-8000-000000000002',
+        label: 'good',
+        status: 'ready',
+        reviewed: true,
+        textLength: 90,
+        wordCount: 13,
+      }),
+    ]);
+    renderAt('/resumes');
+    expect(await screen.findByText(REASON)).toBeInTheDocument();
+    const fix = screen.getByRole('link', { name: /^Fix/ });
+    expect(fix).toHaveAttribute('href', `/resumes/${ID}`);
+    expect(screen.getAllByRole('link', { name: /^Fix/ })).toHaveLength(1);
+  });
+
+  it('opens with the reason, an empty text box, and no Confirm button', async () => {
+    api.get.mockResolvedValue(failed());
+    renderAt(`/resumes/${ID}`);
+    expect(await screen.findByText(REASON)).toBeInTheDocument();
+    expect(screen.getByLabelText('Resume text')).toHaveValue('');
+    expect(screen.getByText(/original file is kept/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Confirm text is correct' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('saving pasted text sends only the text, returns to the list and says it is fixed', async () => {
+    api.get.mockResolvedValue(failed());
+    api.update.mockResolvedValue(readyUnreviewed({ reviewed: true }));
+    api.list.mockResolvedValue([
+      summary({ status: 'ready', reviewed: true, textLength: 90, wordCount: 13 }),
+    ]);
+    const user = userEvent.setup();
+    renderAt(`/resumes/${ID}`);
+    await user.click(await screen.findByLabelText('Resume text'));
+    await user.paste(TEXT);
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(api.update).toHaveBeenCalledExactlyOnceWith(ID, { text: TEXT });
+    expect(await screen.findByRole('heading', { name: 'My Resumes' })).toBeInTheDocument();
+    expect(await screen.findByText('Resume fixed')).toBeInTheDocument();
+    expect(screen.queryByText('Needs review')).not.toBeInTheDocument();
+    expect(screen.queryByText('Failed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Discard your changes?')).not.toBeInTheDocument();
+  });
+
+  it('will not save text that is too short, and sends nothing', async () => {
+    api.get.mockResolvedValue(failed());
+    const user = userEvent.setup();
+    renderAt(`/resumes/${ID}`);
+    await user.click(await screen.findByLabelText('Resume text'));
+    await user.paste('too short');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(await screen.findByText('The resume text is too short')).toBeInTheDocument();
+    expect(api.update).not.toHaveBeenCalled();
+  });
+
+  it('shows the server message if saving is refused, and keeps the pasted text', async () => {
+    api.get.mockResolvedValue(failed());
+    api.update.mockRejectedValue(
+      new ApiError(
+        409,
+        'not_ready',
+        'This resume changed while you were saving. Reload the page and try again.',
+      ),
+    );
+    const user = userEvent.setup();
+    renderAt(`/resumes/${ID}`);
+    await user.click(await screen.findByLabelText('Resume text'));
+    await user.paste(TEXT);
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('changed while you were saving');
+    expect(screen.getByLabelText('Resume text')).toHaveValue(TEXT);
+  });
+
+  it('an upload that never finished is fixed the same way', async () => {
+    api.get.mockResolvedValue(
+      failed({
+        failureReason: {
+          code: 'upload_incomplete',
+          message: 'The upload did not finish. Paste your resume text instead.',
+        },
+      }),
+    );
+    renderAt(`/resumes/${ID}`);
+    expect(await screen.findByText(/The upload did not finish/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Resume text')).toBeEnabled();
+  });
+
+  it('still asks before discarding pasted text', async () => {
+    api.get.mockResolvedValue(failed());
+    const user = userEvent.setup();
+    renderAt(`/resumes/${ID}`);
+    await user.click(await screen.findByLabelText('Resume text'));
+    await user.paste(TEXT);
+    await user.click(screen.getAllByRole('link', { name: 'Applications' })[0]!);
+    expect(await screen.findByText('Discard your changes?')).toBeInTheDocument();
+  });
+});

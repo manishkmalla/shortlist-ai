@@ -32,6 +32,7 @@ const fromResumeError = (e: ResumeError) => {
       return notFound();
     case 'limit_reached':
     case 'not_ready':
+    case 'conflict':
       return errorResponse(409, e.code, e.message);
     default:
       return errorResponse(400, e.code, e.message);

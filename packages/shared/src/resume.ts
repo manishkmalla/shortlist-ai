@@ -148,3 +148,6 @@ export type UploadStarted = z.infer<typeof uploadStartedSchema>;
 /** A ready Resume whose text the user has not reviewed yet. Pasted Resumes are reviewed from the start. */
 export const needsReview = (resume: { status: ResumeStatus; reviewed: boolean }): boolean =>
   resume.status === 'ready' && !resume.reviewed;
+
+/** An upload still processing this long after it was created is treated as failed: the file never arrived or was never read. */
+export const UPLOAD_TIMEOUT_MINUTES = 15;

@@ -22,7 +22,16 @@ function setup() {
     newId: () => `00000000-0000-4000-8000-${String(++n).padStart(12, '0')}`,
     now: () => new Date((clock += 1000)),
   });
-  return { svc, items, repo, storage };
+  return {
+    svc,
+    items,
+    repo,
+    storage,
+    /** Jump the clock forward, for rules that depend on how long ago something happened. */
+    advance: (ms: number) => {
+      clock += ms;
+    },
+  };
 }
 
 function event(
@@ -527,8 +536,10 @@ describe('uploads: what a Resume says about its Original and failures', () => {
 
   it('a copy of an uploaded resume keeps the text but not the Original', async () => {
     const { svc, repo } = setup();
+    // A library always has a default, so the source is it: the copy then has no reason to take over.
     const source = await seedUpload(repo, 'a', 1, {
       status: 'ready',
+      isDefault: true,
       text: TEXT,
       reviewedAt: '2026-01-01T00:00:00.000Z',
     });
@@ -555,7 +566,7 @@ describe('uploads: what a Resume says about its Original and failures', () => {
     expect(await listFor(svc, 'a')).toHaveLength(1);
   });
 
-  it.each(['processing', 'failed'] as const)(
+  it.each(['processing'] as const)(
     'refuses to change the text of a %s resume, because that would mark it reviewed',
     async (status) => {
       const { svc, repo } = setup();
@@ -927,5 +938,362 @@ describe('deleting a resume removes its Original', () => {
     const second = await create(svc, 'a', 'Second');
     await remove(svc, 'a', first.id);
     expect((await listFor(svc, 'a'))[0]).toMatchObject({ id: second.id, isDefault: true });
+  });
+});
+
+describe('fixing a failed upload by pasting text', () => {
+  const failed = (repo: ResumeRepo, n = 1, over: Partial<StoredResume> = {}) =>
+    seedUpload(repo, 'a', n, {
+      status: 'failed',
+      failure: { code: 'no_readable_text', message: 'No readable text was found in this file.' },
+      ...over,
+    });
+  const fix = (svc: Svc, id: string, payload: unknown, sub = 'a') =>
+    route(event('PUT /resumes/{id}', sub, { id, body: payload }), svc);
+
+  it('turns it into a normal, reviewed resume and keeps the Original', async () => {
+    const { svc, repo, storage } = setup();
+    const { id } = await failed(repo);
+    await storage.store.put(`uploads/a/${id}/alex-example-cv.pdf`, new Uint8Array([1, 2, 3]));
+    const r = res(await fix(svc, id, { text: TEXT }));
+    expect(r.statusCode).toBe(200);
+    expect(body(r)).toMatchObject({
+      status: 'ready',
+      text: TEXT,
+      reviewed: true,
+      failureReason: null,
+      hasOriginal: true,
+      wordCount: 13,
+    });
+    expect(await storage.store.head(`uploads/a/${id}/alex-example-cv.pdf`)).not.toBeNull();
+    expect(body(await route(event('GET /resumes/{id}', 'a', { id }), svc))).toMatchObject({
+      status: 'ready',
+      failureReason: null,
+    });
+  });
+
+  it('can rename and fix in one go', async () => {
+    const { svc, repo } = setup();
+    const { id } = await failed(repo);
+    const r = body(await fix(svc, id, { label: 'AI Engineer', text: TEXT }));
+    expect(r).toMatchObject({ label: 'AI Engineer', status: 'ready' });
+  });
+
+  it.each([
+    ['too short', 'hi'],
+    ['too long', 'x'.repeat(60_001)],
+  ])('refuses text that is %s and leaves it failed', async (_name, text) => {
+    const { svc, repo } = setup();
+    const { id } = await failed(repo);
+    expect(res(await fix(svc, id, { text })).statusCode).toBe(400);
+    expect(body(await route(event('GET /resumes/{id}', 'a', { id }), svc))).toMatchObject({
+      status: 'failed',
+      text: '',
+    });
+  });
+
+  it('confirming alone does not fix it: text is required', async () => {
+    const { svc, repo } = setup();
+    const { id } = await failed(repo);
+    const r = res(await fix(svc, id, { reviewed: true }));
+    expect(r.statusCode).toBe(409);
+    expect(body(r).error.code).toBe('not_ready');
+  });
+
+  it('a fixed resume works like any other: it can be copied', async () => {
+    const { svc, repo } = setup();
+    const { id } = await failed(repo);
+    await fix(svc, id, { text: TEXT });
+    expect(
+      res(await route(event('POST /resumes/{id}/duplicate', 'a', { id }), svc)).statusCode,
+    ).toBe(201);
+  });
+
+  it('another user cannot fix it, and it stays failed', async () => {
+    const { svc, repo } = setup();
+    const { id } = await failed(repo);
+    expect(res(await fix(svc, id, { text: TEXT }, 'b')).statusCode).toBe(404);
+    expect(body(await route(event('GET /resumes/{id}', 'a', { id }), svc)).status).toBe('failed');
+  });
+
+  it('a resume that is ready is edited as before (no change to normal editing)', async () => {
+    const { svc } = setup();
+    const { id } = await create(svc, 'a');
+    const edited = `${TEXT}\nMore detail.`;
+    expect(body(await fix(svc, id, { text: edited }))).toMatchObject({
+      text: edited,
+      status: 'ready',
+    });
+  });
+});
+
+describe('an upload that never finished', () => {
+  const MINUTE = 60_000;
+  const stuck = (repo: ResumeRepo) => seedUpload(repo, 'a', 1, { status: 'processing' });
+  const get = async (svc: Svc, id: string) =>
+    body(await route(event('GET /resumes/{id}', 'a', { id }), svc));
+
+  it('is still processing after fourteen minutes', async () => {
+    const { svc, repo, advance } = setup();
+    const { id } = await stuck(repo);
+    advance(14 * MINUTE);
+    expect(await get(svc, id)).toMatchObject({ status: 'processing', failureReason: null });
+  });
+
+  it('shows as failed after sixteen minutes, in the list and when fetched', async () => {
+    const { svc, repo, advance } = setup();
+    const { id } = await stuck(repo);
+    advance(16 * MINUTE);
+    const fetched = await get(svc, id);
+    const [listed] = await listFor(svc, 'a');
+    for (const r of [fetched, listed]) {
+      expect(r.status).toBe('failed');
+      expect(r.failureReason.code).toBe('upload_incomplete');
+      expect(r.failureReason.message).toMatch(/did not finish/i);
+    }
+  });
+
+  it('can then be fixed by pasting text', async () => {
+    const { svc, repo, advance } = setup();
+    const { id } = await stuck(repo);
+    advance(16 * MINUTE);
+    const r = res(await route(event('PUT /resumes/{id}', 'a', { id, body: { text: TEXT } }), svc));
+    expect(r.statusCode).toBe(200);
+    expect(body(r)).toMatchObject({ status: 'ready', reviewed: true, failureReason: null });
+    advance(60 * MINUTE);
+    expect((await get(svc, id)).status).toBe('ready');
+  });
+
+  it('can be deleted, and still counts towards the limit until then', async () => {
+    const { svc, repo, advance } = setup();
+    for (let i = 1; i < MAX_RESUMES; i++) await create(svc, 'a', `R${i}`);
+    const { id } = await stuck(repo);
+    advance(16 * MINUTE);
+    expect(
+      res(
+        await route(
+          event('POST /resumes', 'a', { body: { label: 'One too many', text: TEXT } }),
+          svc,
+        ),
+      ).statusCode,
+    ).toBe(409);
+    expect(res(await route(event('DELETE /resumes/{id}', 'a', { id }), svc)).statusCode).toBe(204);
+    expect(
+      res(
+        await route(
+          event('POST /resumes', 'a', { body: { label: 'Now there is room', text: TEXT } }),
+          svc,
+        ),
+      ).statusCode,
+    ).toBe(201);
+  });
+
+  it('cannot be confirmed as reviewed or copied, like any other failed upload', async () => {
+    const { svc, repo, advance } = setup();
+    const { id } = await stuck(repo);
+    advance(16 * MINUTE);
+    expect(
+      res(await route(event('PUT /resumes/{id}', 'a', { id, body: { reviewed: true } }), svc))
+        .statusCode,
+    ).toBe(409);
+    expect(
+      res(await route(event('POST /resumes/{id}/duplicate', 'a', { id }), svc)).statusCode,
+    ).toBe(409);
+  });
+
+  it('never affects resumes that are not processing, however old they are', async () => {
+    const { svc, repo, advance } = setup();
+    const pasted = await create(svc, 'a', 'Pasted');
+    const ready = await seedUpload(repo, 'a', 2, { status: 'ready', text: TEXT });
+    advance(365 * 24 * 60 * MINUTE);
+    expect((await get(svc, pasted.id)).status).toBe('ready');
+    expect((await get(svc, ready.id)).status).toBe('ready');
+  });
+
+  it('is only visible to its owner', async () => {
+    const { svc, repo, advance } = setup();
+    const { id } = await stuck(repo);
+    advance(16 * MINUTE);
+    expect(
+      res(await route(event('PUT /resumes/{id}', 'b', { id, body: { text: TEXT } }), svc))
+        .statusCode,
+    ).toBe(404);
+    expect(await listFor(svc, 'b')).toEqual([]);
+  });
+});
+
+describe('the default resume when it is not ready', () => {
+  const MINUTE = 60_000;
+  const defaults = async (svc: Svc) =>
+    (await listFor(svc, 'a')).filter((r: { isDefault: boolean }) => r.isDefault);
+  const failedDefault = (repo: ResumeRepo) =>
+    seedUpload(repo, 'a', 1, {
+      status: 'failed',
+      isDefault: true,
+      failure: { code: 'wrong_type', message: 'This file does not look like a text file.' },
+    });
+
+  it('a pasted resume takes over from a failed default, leaving exactly one default', async () => {
+    const { svc, repo } = setup();
+    const old = await failedDefault(repo);
+    const added = await create(svc, 'a', 'Pasted');
+    expect(added.isDefault).toBe(true);
+    const now = await defaults(svc);
+    expect(now).toHaveLength(1);
+    expect(now[0].id).toBe(added.id);
+    expect(body(await route(event('GET /resumes/{id}', 'a', { id: old.id }), svc)).isDefault).toBe(
+      false,
+    );
+  });
+
+  it('a pasted resume takes over from a default that is still being read, or never finished', async () => {
+    const { svc, repo, advance } = setup();
+    await seedUpload(repo, 'a', 1, { status: 'processing', isDefault: true });
+    advance(20 * MINUTE);
+    const added = await create(svc, 'a', 'Pasted');
+    expect(added.isDefault).toBe(true);
+    expect(await defaults(svc)).toHaveLength(1);
+  });
+
+  it('a default that is ready is never taken over', async () => {
+    const { svc } = setup();
+    const first = await create(svc, 'a', 'First');
+    const second = await create(svc, 'a', 'Second');
+    expect(second.isDefault).toBe(false);
+    expect((await defaults(svc))[0].id).toBe(first.id);
+  });
+
+  it('fixing another failed upload makes it the default when the default is failed', async () => {
+    const { svc, repo } = setup();
+    await failedDefault(repo);
+    const other = await seedUpload(repo, 'a', 2, {
+      status: 'failed',
+      failure: { code: 'corrupt', message: 'The file could not be read.' },
+    });
+    const r = body(
+      await route(event('PUT /resumes/{id}', 'a', { id: other.id, body: { text: TEXT } }), svc),
+    );
+    expect(r).toMatchObject({ status: 'ready', isDefault: true });
+    const now = await defaults(svc);
+    expect(now).toHaveLength(1);
+    expect(now[0].id).toBe(other.id);
+  });
+
+  it('fixing the default itself keeps it the default', async () => {
+    const { svc, repo } = setup();
+    const old = await failedDefault(repo);
+    const r = body(
+      await route(event('PUT /resumes/{id}', 'a', { id: old.id, body: { text: TEXT } }), svc),
+    );
+    expect(r).toMatchObject({ status: 'ready', isDefault: true });
+    expect(await defaults(svc)).toHaveLength(1);
+  });
+
+  it('fixing a failed upload does not disturb a default that is ready', async () => {
+    const { svc, repo } = setup();
+    const ready = await create(svc, 'a', 'Ready');
+    const failed = await seedUpload(repo, 'a', 2, {
+      status: 'failed',
+      failure: { code: 'corrupt', message: 'The file could not be read.' },
+    });
+    const r = body(
+      await route(event('PUT /resumes/{id}', 'a', { id: failed.id, body: { text: TEXT } }), svc),
+    );
+    expect(r.isDefault).toBe(false);
+    expect((await defaults(svc))[0].id).toBe(ready.id);
+  });
+
+  it('starting an upload does not change the default: only a ready resume can take over', async () => {
+    const { svc, repo } = setup();
+    const old = await failedDefault(repo);
+    const started = body(
+      await route(
+        event('POST /resumes/upload-url', 'a', { body: { filename: 'new.txt', size: 50 } }),
+        svc,
+      ),
+    );
+    expect(started.resume.isDefault).toBe(false);
+    expect((await defaults(svc))[0].id).toBe(old.id);
+  });
+
+  it("another user's default is never touched", async () => {
+    const { svc, repo } = setup();
+    await failedDefault(repo);
+    const theirs = await create(svc, 'b', 'Theirs');
+    await create(svc, 'a', 'Mine');
+    const b = await listFor(svc, 'b');
+    expect(b).toHaveLength(1);
+    expect(b[0]).toMatchObject({ id: theirs.id, isDefault: true });
+  });
+});
+
+describe('consistency of what the user sees', () => {
+  const MINUTE = 60_000;
+
+  it('renaming an upload that never finished still reports it as failed', async () => {
+    const { svc, repo, advance } = setup();
+    const { id } = await seedUpload(repo, 'a', 1, { status: 'processing' });
+    advance(16 * MINUTE);
+    const r = body(
+      await route(event('PUT /resumes/{id}', 'a', { id, body: { label: 'Renamed' } }), svc),
+    );
+    expect(r).toMatchObject({ label: 'Renamed', status: 'failed' });
+    expect(r.failureReason.code).toBe('upload_incomplete');
+  });
+
+  it('deleting the default prefers a resume that is ready over a newer one that is not', async () => {
+    const { svc, repo } = setup();
+    const doomed = await create(svc, 'a', 'Default');
+    const ready = await create(svc, 'a', 'Ready but older');
+    await seedUpload(repo, 'a', 3, {
+      status: 'failed',
+      updatedAt: '2030-01-01T00:00:00.000Z',
+      failure: { code: 'corrupt', message: 'The file could not be read.' },
+    });
+    await route(event('DELETE /resumes/{id}', 'a', { id: doomed.id }), svc);
+    const defaults = (await listFor(svc, 'a')).filter((r: { isDefault: boolean }) => r.isDefault);
+    expect(defaults).toHaveLength(1);
+    expect(defaults[0].id).toBe(ready.id);
+  });
+
+  it('deleting the default when nothing else is ready still leaves one default', async () => {
+    const { svc, repo } = setup();
+    const doomed = await create(svc, 'a', 'Default');
+    const failed = await seedUpload(repo, 'a', 2, {
+      status: 'failed',
+      failure: { code: 'corrupt', message: 'The file could not be read.' },
+    });
+    await route(event('DELETE /resumes/{id}', 'a', { id: doomed.id }), svc);
+    const defaults = (await listFor(svc, 'a')).filter((r: { isDefault: boolean }) => r.isDefault);
+    expect(defaults.map((r: { id: string }) => r.id)).toEqual([failed.id]);
+  });
+
+  it('a fix that loses a race with the file being read is refused, with its own error, and changes nothing', async () => {
+    const { svc, repo } = setup();
+    // Stored as ready (the file was just read), but the page the user fixed from still saw it as failed.
+    const { id } = await seedUpload(repo, 'a', 1, { status: 'ready', text: TEXT });
+    const staleView = (await repo.get('a', id))!;
+    vi.spyOn(repo, 'get').mockResolvedValueOnce({
+      ...staleView,
+      status: 'failed',
+      text: '',
+      failure: { code: 'corrupt', message: 'The file could not be read.' },
+    });
+    const r = res(
+      await route(
+        event('PUT /resumes/{id}', 'a', {
+          id,
+          body: { text: 'Pasted text that is long enough to count.' },
+        }),
+        svc,
+      ),
+    );
+    expect(r.statusCode).toBe(409);
+    expect(body(r).error.code).toBe('conflict');
+    expect(body(r).error.message).toMatch(/changed while you were saving/i);
+    expect(body(await route(event('GET /resumes/{id}', 'a', { id }), svc))).toMatchObject({
+      status: 'ready',
+      text: TEXT,
+    });
   });
 });

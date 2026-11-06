@@ -11,6 +11,17 @@ import type { Db } from './db';
 
 type Item = Record<string, unknown> & { pk: string; sk: string };
 
+/** Like DynamoDB, refuses a name placeholder that was never defined, instead of silently ignoring it. */
+function definedName(names: Record<string, string>, ref: string): string {
+  const name = names[ref];
+  if (name === undefined) {
+    throw Object.assign(new Error(`Undefined name placeholder ${ref}`), {
+      name: 'ValidationException',
+    });
+  }
+  return name;
+}
+
 /** In-memory stand-in for the document client, covering only the commands the repos use. */
 export function createFakeDb() {
   const items = new Map<string, Item>();
@@ -59,8 +70,12 @@ export function createFakeDb() {
         for (const [, ref, value] of (command.input.UpdateExpression ?? '').matchAll(
           /(#\w+) = (:\w+)/g,
         )) {
-          updated[names[ref!]!] = values[value!];
+          updated[definedName(names, ref!)] = values[value!];
         }
+        // REMOVE #a, #b deletes those attributes.
+        const remove = /REMOVE\s+([#\w\s,]+)$/.exec(command.input.UpdateExpression ?? '');
+        for (const ref of remove?.[1]?.split(',').map((r) => r.trim()) ?? [])
+          delete updated[definedName(names, ref)];
         items.set(id(k.pk, k.sk), updated);
         return { Attributes: updated };
       }

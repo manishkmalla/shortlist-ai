@@ -175,11 +175,22 @@ export function ResumeRow({
           {resume.status === 'processing' && <Badge tone="caution">Processing</Badge>}
           {needsReview(resume) && <Badge tone="caution">Needs review</Badge>}
           {resume.status === 'failed' && <Badge tone="bad">Failed</Badge>}
+          {resume.status === 'failed' && (
+            <Link
+              to={`/resumes/${resume.id}`}
+              className="text-sm font-medium text-accent dark:text-accent-dark"
+            >
+              Fix<span className="sr-only"> {resume.label}</span>
+            </Link>
+          )}
         </div>
         <p className="text-sm text-slate-500 dark:text-slate-400">
           {sourceLabel(resume)} · Updated {formatDate(resume.updatedAt)} ·{' '}
           {formatWords(resume.wordCount)}
         </p>
+        {resume.failureReason && (
+          <p className="text-sm text-bad dark:text-red-400">{resume.failureReason.message}</p>
+        )}
         {resume.notes && (
           <p className="truncate text-sm text-slate-600 dark:text-slate-400">{resume.notes}</p>
         )}

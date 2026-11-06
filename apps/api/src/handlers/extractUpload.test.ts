@@ -301,3 +301,79 @@ describe('privacy', () => {
     expect(logged).not.toContain('alex@example.com');
   });
 });
+
+describe('which resume is the default after reading a file', () => {
+  const listDefaults = async (repo: ReturnType<typeof setup>['repo']) =>
+    (await repo.list('a')).filter((r) => r.isDefault).map((r) => r.id);
+
+  it('a file that is read takes over from a default that is not ready', async () => {
+    const { upload, process, repo } = setup();
+    await upload(bytes('x'), {
+      id: OTHER_ID,
+      resume: { status: 'failed', isDefault: true, failure: { code: 'corrupt', message: 'x' } },
+      skipFile: true,
+    });
+    const { key } = await upload(bytes(CV), { resume: { isDefault: false } });
+    await process(key);
+    expect(await listDefaults(repo)).toEqual([RESUME_ID]);
+  });
+
+  it('a file that is read leaves a default that is ready alone', async () => {
+    const { upload, process, repo } = setup();
+    await upload(bytes(CV), {
+      id: OTHER_ID,
+      filename: 'first.txt',
+      resume: {
+        status: 'ready',
+        isDefault: true,
+        text: CV,
+        reviewedAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+    const { key } = await upload(bytes(CV), { resume: { isDefault: false } });
+    await process(key);
+    expect(await listDefaults(repo)).toEqual([OTHER_ID]);
+  });
+
+  it('the first upload stays the default when it is read', async () => {
+    const { upload, process, repo } = setup();
+    const { key } = await upload(bytes(CV));
+    await process(key);
+    expect(await listDefaults(repo)).toEqual([RESUME_ID]);
+  });
+
+  it('a file that fails to read never changes the default', async () => {
+    const { upload, process, repo } = setup();
+    await upload(bytes('x'), {
+      id: OTHER_ID,
+      resume: { status: 'failed', isDefault: true, failure: { code: 'corrupt', message: 'x' } },
+      skipFile: true,
+    });
+    const { key } = await upload(bytes('hi'), { resume: { isDefault: false } });
+    await process(key);
+    expect(await listDefaults(repo)).toEqual([OTHER_ID]);
+  });
+});
+
+describe('a file that arrives after the upload timed out', () => {
+  it('still completes a Resume that was never fixed', async () => {
+    const { upload, process, resume } = setup();
+    // Created long before "now" (2026-02-01), so it is past the 15 minute limit and shows as failed to the user.
+    const { key } = await upload(bytes(CV), { resume: { createdAt: '2026-01-01T00:00:00.000Z' } });
+    await process(key);
+    expect(await resume()).toMatchObject({ status: 'ready', text: CV });
+  });
+
+  it('leaves a Resume the user already fixed alone', async () => {
+    const { upload, process, resume } = setup();
+    const { key } = await upload(bytes(CV), {
+      resume: {
+        status: 'ready',
+        text: 'Text the user pasted themselves.',
+        reviewedAt: '2026-01-02T00:00:00.000Z',
+      },
+    });
+    await process(key);
+    expect(await resume()).toMatchObject({ text: 'Text the user pasted themselves.' });
+  });
+});

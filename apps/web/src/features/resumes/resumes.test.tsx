@@ -423,3 +423,24 @@ describe('unsaved changes', () => {
     expect(screen.queryByText('Discard your changes?')).not.toBeInTheDocument();
   });
 });
+
+describe('deleting the default resume', () => {
+  it('names a ready resume as the next default, even when a newer one has failed', async () => {
+    api.list.mockResolvedValue([
+      summary(1, {
+        label: 'Newest but failed',
+        status: 'failed',
+        failureReason: { code: 'corrupt', message: 'The file could not be read.' },
+      }),
+      summary(2, { label: 'Current default', isDefault: true }),
+      summary(3, { label: 'Older and ready' }),
+    ]);
+    const user = userEvent.setup();
+    renderAt('/resumes');
+    await openMenu(user, 'Current default');
+    await user.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+    expect(
+      await screen.findByText(/"Older and ready" will become your default resume/),
+    ).toBeInTheDocument();
+  });
+});

@@ -87,6 +87,8 @@ export function createResumeRepo(db: Db, tableName: string): ResumeRepo {
         const page = await db.send(
           new QueryCommand({
             TableName: tableName,
+            // Reads follow writes in the same request (a Resume is fixed, then the default is chosen), so see them.
+            ConsistentRead: true,
             KeyConditionExpression: 'pk = :pk AND begins_with(sk, :prefix)',
             ExpressionAttributeValues: { ':pk': userPk(userId), ':prefix': RESUME_PREFIX },
             ExclusiveStartKey: startKey,
@@ -99,7 +101,9 @@ export function createResumeRepo(db: Db, tableName: string): ResumeRepo {
     },
 
     async get(userId, id) {
-      const out = await db.send(new GetCommand({ TableName: tableName, Key: key(userId, id) }));
+      const out = await db.send(
+        new GetCommand({ TableName: tableName, Key: key(userId, id), ConsistentRead: true }),
+      );
       return out.Item ? storedResumeSchema.parse(out.Item) : null;
     },
 

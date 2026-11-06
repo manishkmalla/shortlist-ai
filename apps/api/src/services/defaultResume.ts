@@ -12,13 +12,13 @@ export async function claimDefaultIfNotReady(
   resumeId: string,
   stamp: string,
 ): Promise<boolean> {
-  const others = (await repo.list(userId)).filter((r) => r.isDefault && r.id !== resumeId);
-  const alreadyDefault = (await repo.get(userId, resumeId))?.isDefault === true;
-  if (alreadyDefault || others.some((r) => r.status === 'ready')) return false;
+  const defaults = (await repo.list(userId)).filter((r) => r.isDefault);
+  // Already the default, or the current default is usable (stored status, so one that never finished counts as not ready).
+  if (defaults.some((r) => r.id === resumeId || r.status === 'ready')) return false;
   return repo.setDefault(
     userId,
     resumeId,
-    others.map((r) => r.id),
+    defaults.map((r) => r.id),
     stamp,
   );
 }

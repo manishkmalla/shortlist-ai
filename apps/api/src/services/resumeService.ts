@@ -29,6 +29,7 @@ export class ResumeError extends Error {
       | 'limit_reached'
       | 'not_found'
       | 'not_ready'
+      | 'conflict'
       | 'unsupported_type'
       | 'type_mismatch'
       | 'file_too_large',
@@ -230,14 +231,16 @@ export function createResumeService(deps: {
      * exception: pasting text into a failed upload fixes it, turning it into a ready, reviewed Resume.
      */
     async update(userId: string, id: string, input: UpdateResumeRequest): Promise<Resume | null> {
-      // Checked first, so a refusal changes nothing.
-      let fixingFrom: StoredResume['status'] | null = null;
+      // Checked first, so a refusal changes nothing. Reviewing or editing text depends on the Resume's status, so the
+      // write below only goes through if it is still in the status that was checked (a file may be read in between).
+      let fixing = false;
+      let expectedStatus: StoredResume['status'] | undefined;
       if (input.reviewed || input.text !== undefined) {
         const stored = await deps.repo.get(userId, id);
         if (!stored) return null;
-        // `stored.status` is what the write must still find; the decision uses what the user sees.
-        if (input.text !== undefined && view(stored).status === 'failed')
-          fixingFrom = stored.status;
+        expectedStatus = stored.status;
+        // The decision uses what the user sees (an upload that never finished counts as failed).
+        if (input.text !== undefined && view(stored).status === 'failed') fixing = true;
         else assertReady(view(stored), 'marked as reviewed or have its text edited');
       }
       const stamp = now();
@@ -248,7 +251,7 @@ export function createResumeService(deps: {
         updatedAt: stamp,
       };
       if (input.text !== undefined || input.reviewed) patch.reviewedAt = stamp;
-      if (fixingFrom) {
+      if (fixing) {
         // The user typed this text themselves, so it counts as reviewed, and the old failure no longer applies.
         patch.status = 'ready';
         patch.failure = null;
@@ -258,12 +261,12 @@ export function createResumeService(deps: {
         userId,
         id,
         patch,
-        fixingFrom ? { onlyIfStatus: fixingFrom } : undefined,
+        expectedStatus ? { onlyIfStatus: expectedStatus } : undefined,
       );
       if (!updated) {
-        if (fixingFrom) {
+        if (expectedStatus) {
           throw new ResumeError(
-            'not_ready',
+            'conflict',
             'This resume changed while you were saving. Reload the page and try again.',
           );
         }
@@ -271,7 +274,7 @@ export function createResumeService(deps: {
       }
 
       // A fixed Resume is ready now, so it takes over if the default is not ready.
-      if (fixingFrom && (await claimDefaultIfNotReady(deps.repo, userId, id, stamp))) {
+      if (fixing && (await claimDefaultIfNotReady(deps.repo, userId, id, stamp))) {
         updated = (await deps.repo.get(userId, id)) ?? updated;
       }
 
@@ -282,7 +285,7 @@ export function createResumeService(deps: {
         if (!(await deps.repo.setDefault(userId, id, others, stamp))) return null;
         updated = (await deps.repo.get(userId, id)) ?? updated;
       }
-      return toResume(updated);
+      return toResume(view(updated));
     },
 
     /** Deleting the default promotes the most recently updated remaining resume. */
@@ -296,7 +299,10 @@ export function createResumeService(deps: {
       }
       await deps.repo.delete(userId, id);
       if (target.isDefault) {
-        const [next] = (await deps.repo.list(userId)).sort(newestFirst);
+        // A ready resume if there is one, otherwise the most recently updated, so the user is not left a default
+        // they cannot use while a usable one exists.
+        const remaining = (await deps.repo.list(userId)).sort(newestFirst);
+        const next = remaining.find((r) => r.status === 'ready') ?? remaining[0];
         if (next) await deps.repo.setDefault(userId, next.id, [], now());
       }
       return true;

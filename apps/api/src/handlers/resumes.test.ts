@@ -1226,3 +1226,74 @@ describe('the default resume when it is not ready', () => {
     expect(b[0]).toMatchObject({ id: theirs.id, isDefault: true });
   });
 });
+
+describe('consistency of what the user sees', () => {
+  const MINUTE = 60_000;
+
+  it('renaming an upload that never finished still reports it as failed', async () => {
+    const { svc, repo, advance } = setup();
+    const { id } = await seedUpload(repo, 'a', 1, { status: 'processing' });
+    advance(16 * MINUTE);
+    const r = body(
+      await route(event('PUT /resumes/{id}', 'a', { id, body: { label: 'Renamed' } }), svc),
+    );
+    expect(r).toMatchObject({ label: 'Renamed', status: 'failed' });
+    expect(r.failureReason.code).toBe('upload_incomplete');
+  });
+
+  it('deleting the default prefers a resume that is ready over a newer one that is not', async () => {
+    const { svc, repo } = setup();
+    const doomed = await create(svc, 'a', 'Default');
+    const ready = await create(svc, 'a', 'Ready but older');
+    await seedUpload(repo, 'a', 3, {
+      status: 'failed',
+      updatedAt: '2030-01-01T00:00:00.000Z',
+      failure: { code: 'corrupt', message: 'The file could not be read.' },
+    });
+    await route(event('DELETE /resumes/{id}', 'a', { id: doomed.id }), svc);
+    const defaults = (await listFor(svc, 'a')).filter((r: { isDefault: boolean }) => r.isDefault);
+    expect(defaults).toHaveLength(1);
+    expect(defaults[0].id).toBe(ready.id);
+  });
+
+  it('deleting the default when nothing else is ready still leaves one default', async () => {
+    const { svc, repo } = setup();
+    const doomed = await create(svc, 'a', 'Default');
+    const failed = await seedUpload(repo, 'a', 2, {
+      status: 'failed',
+      failure: { code: 'corrupt', message: 'The file could not be read.' },
+    });
+    await route(event('DELETE /resumes/{id}', 'a', { id: doomed.id }), svc);
+    const defaults = (await listFor(svc, 'a')).filter((r: { isDefault: boolean }) => r.isDefault);
+    expect(defaults.map((r: { id: string }) => r.id)).toEqual([failed.id]);
+  });
+
+  it('a fix that loses a race with the file being read is refused, with its own error, and changes nothing', async () => {
+    const { svc, repo } = setup();
+    // Stored as ready (the file was just read), but the page the user fixed from still saw it as failed.
+    const { id } = await seedUpload(repo, 'a', 1, { status: 'ready', text: TEXT });
+    const staleView = (await repo.get('a', id))!;
+    vi.spyOn(repo, 'get').mockResolvedValueOnce({
+      ...staleView,
+      status: 'failed',
+      text: '',
+      failure: { code: 'corrupt', message: 'The file could not be read.' },
+    });
+    const r = res(
+      await route(
+        event('PUT /resumes/{id}', 'a', {
+          id,
+          body: { text: 'Pasted text that is long enough to count.' },
+        }),
+        svc,
+      ),
+    );
+    expect(r.statusCode).toBe(409);
+    expect(body(r).error.code).toBe('conflict');
+    expect(body(r).error.message).toMatch(/changed while you were saving/i);
+    expect(body(await route(event('GET /resumes/{id}', 'a', { id }), svc))).toMatchObject({
+      status: 'ready',
+      text: TEXT,
+    });
+  });
+});

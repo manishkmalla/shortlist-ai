@@ -1,8 +1,14 @@
-import { MAX_RESUMES } from '@shortlist-ai/shared';
+import { MAX_RESUMES, type ResumeSummary } from '@shortlist-ai/shared';
 import { Link } from 'react-router-dom';
 import { Button, Card, buttonStyles } from '../components/ui';
 import { useResumes } from '../features/resumes/hooks';
 import { ResumeRow } from '../features/resumes/ResumeRow';
+
+/** The resume that becomes the default if this one is deleted: a ready one if there is one, newest first. Mirrors the server. */
+function nextDefaultAfterDeleting(list: ResumeSummary[], deletedId: string) {
+  const others = list.filter((other) => other.id !== deletedId);
+  return others.find((other) => other.status === 'ready') ?? others[0];
+}
 
 export function ResumesPage() {
   const resumes = useResumes();
@@ -67,7 +73,7 @@ export function ResumesPage() {
                 key={r.id}
                 resume={r}
                 // The list is newest first, and the server promotes the most recently updated remaining resume.
-                nextDefault={resumes.data.find((other) => other.id !== r.id)}
+                nextDefault={nextDefaultAfterDeleting(resumes.data, r.id)}
                 atLimit={resumes.data.length >= MAX_RESUMES}
               />
             ))}

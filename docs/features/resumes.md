@@ -49,7 +49,7 @@ How it behaves:
 - **Character count:** the editor shows `N / 60,000 characters` live. Over the limit, a message says by how many characters, and saving is refused. The text is never truncated.
 - **Edits send only what changed.** Renaming does not resend the text, and only a text change marks the resume reviewed.
 - **Unsaved changes:** leaving the editor by any route (sidebar, Cancel, browser back) asks "Discard your changes?" while the form has edits, and closing the tab triggers the browser prompt. After a successful save it does not ask. This needs a data router, so the app mounts under `createBrowserRouter` with a single splat route that holds the existing `<Routes>`.
-- **Delete** asks first. If the resume is the default, the dialog names the resume that will become the default (the most recently updated remaining one, matching the server rule).
+- **Delete** asks first. If the resume is the default, the dialog names the resume that will become the default (a ready one if there is one, newest first, matching the server rule).
 - **Onboarding:** the wizard's resume step uses the same form (without notes). See [Onboarding wizard](onboarding.md).
 
 ## Uploaded Resumes (groundwork)
@@ -125,7 +125,7 @@ A file can fail to read: scanned or empty, over the length limit, a PDF or zip r
 ## Rules
 
 - **Limit:** 10 resumes per user. Create and duplicate both check it. The check is not atomic, so two simultaneous requests could briefly exceed it. That is harmless and bounded by the API throttle.
-- **Default:** the first resume becomes the default. Choosing another clears the old default in one transaction, so there is never more than one. Deleting the default promotes the most recently updated remaining resume. `isDefault` can only be set to `true`. If the default is **not ready** (failed, or still processing), the first Resume that becomes ready takes over: one that is pasted, copied, fixed, or finishes being read. A default that is ready is never changed by this, and starting an upload does not change it, because that Resume is not ready yet.
+- **Default:** the first resume becomes the default. Choosing another clears the old default in one transaction, so there is never more than one. Deleting the default promotes a ready resume if there is one (the most recently updated), otherwise the most recently updated remaining resume. `isDefault` can only be set to `true`. If the default is **not ready** (failed, or still processing), the first Resume that becomes ready takes over: one that is pasted, copied, fixed, or finishes being read. A default that is ready is never changed by this, and starting an upload does not change it, because that Resume is not ready yet.
 - **Ownership:** the user ID comes only from the token. Ids in paths must be UUIDs, and anything else is a 404.
 - **Body size:** requests over 250 KB are rejected.
 - **Privacy:** logs contain error class names and IDs only, never resume text, labels or notes.

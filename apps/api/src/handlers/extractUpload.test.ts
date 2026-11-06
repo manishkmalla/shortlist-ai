@@ -354,3 +354,26 @@ describe('which resume is the default after reading a file', () => {
     expect(await listDefaults(repo)).toEqual([OTHER_ID]);
   });
 });
+
+describe('a file that arrives after the upload timed out', () => {
+  it('still completes a Resume that was never fixed', async () => {
+    const { upload, process, resume } = setup();
+    // Created long before "now" (2026-02-01), so it is past the 15 minute limit and shows as failed to the user.
+    const { key } = await upload(bytes(CV), { resume: { createdAt: '2026-01-01T00:00:00.000Z' } });
+    await process(key);
+    expect(await resume()).toMatchObject({ status: 'ready', text: CV });
+  });
+
+  it('leaves a Resume the user already fixed alone', async () => {
+    const { upload, process, resume } = setup();
+    const { key } = await upload(bytes(CV), {
+      resume: {
+        status: 'ready',
+        text: 'Text the user pasted themselves.',
+        reviewedAt: '2026-01-02T00:00:00.000Z',
+      },
+    });
+    await process(key);
+    expect(await resume()).toMatchObject({ text: 'Text the user pasted themselves.' });
+  });
+});

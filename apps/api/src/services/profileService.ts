@@ -117,7 +117,6 @@ export function createProfileService(deps: {
       return stored ? resolve(stored) : null;
     },
 
-    /** Data first, then the login. If the second step fails the user can retry. */
     /**
      * Files first, then the data, then the login. Every step is safe to repeat, and a failure stops the rest, so a
      * failed attempt leaves the account usable and a retry finishes the job. Deleting the login last means the user

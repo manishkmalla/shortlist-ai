@@ -304,21 +304,32 @@ describe('deleting an account removes the uploaded files too', () => {
     const { svc, storage, items, deleteUser } = setup();
     await route(event('GET', 'a'), svc);
     await put(storage, 'a', RESUME);
-    const seen: { filesLeft: number; dataLeft: number }[] = [];
-    deleteUser.mockImplementation(async () => {
-      seen.push({
-        filesLeft: (await storage.store.list('uploads/a/')).length,
-        dataLeft: items.size,
-      });
+    // What is left at the moment each step runs.
+    const left = () => ({ files: storage.objects.size, data: items.size });
+    const atFirstFileDelete: { files: number; data: number }[] = [];
+    const atLoginDelete: { files: number; data: number }[] = [];
+    const realDelete = storage.store.delete.bind(storage.store);
+    vi.spyOn(storage.store, 'delete').mockImplementation(async (key) => {
+      atFirstFileDelete.push(left());
+      await realDelete(key);
     });
-    const files = vi.spyOn(storage.store, 'delete').mockImplementation(async (key) => {
-      // While the files are being removed, the account data must still be there.
-      expect(items.has('USER#a|PROFILE')).toBe(true);
-      storage.objects.delete(key);
+    deleteUser.mockImplementation(async () => {
+      atLoginDelete.push(left());
     });
     await route(del('a'), svc);
-    expect(files).toHaveBeenCalledTimes(1);
-    expect(seen).toEqual([{ filesLeft: 0, dataLeft: 0 }]);
+    expect(atFirstFileDelete).toEqual([{ files: 1, data: 1 }]); // data still there while files go
+    expect(atLoginDelete).toEqual([{ files: 0, data: 0 }]); // everything else gone before the login
+  });
+
+  it('if removing the data fails, the login is left alone and a retry finishes the job', async () => {
+    const { svc, storage, repo, deleteUser } = setup();
+    await route(event('GET', 'a'), svc);
+    await put(storage, 'a', RESUME);
+    vi.spyOn(repo, 'deleteAll').mockRejectedValueOnce(new Error('database down'));
+    await expect(route(del('a'), svc)).rejects.toThrow('database down');
+    expect(deleteUser).not.toHaveBeenCalled();
+    expect(asResult(await route(del('a'), svc)).statusCode).toBe(204);
+    expect(deleteUser).toHaveBeenCalledOnce();
   });
 
   it('if removing the files fails, nothing else is touched and a retry finishes the job', async () => {

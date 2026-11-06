@@ -79,6 +79,17 @@ export class ApiStack extends Stack {
         new PolicyStatement({ effect: Effect.ALLOW, actions, resources: [props.apiKeyKey.keyArn] }),
       );
 
+    // Deleting files is allowed only under the uploads prefix. Two functions get it: deleting a Resume and
+    // deleting an account.
+    const allowDeleteUploads = (fn: ReturnType<typeof route>) =>
+      fn.addToRolePolicy(
+        new PolicyStatement({
+          effect: Effect.ALLOW,
+          actions: ['s3:DeleteObject'],
+          resources: [props.uploadsBucket.arnForObjects('uploads/*')],
+        }),
+      );
+
     // One function per verb so each gets only the permissions it needs.
     props.table.grant(
       route('GetMe', 'profile.ts', HttpMethod.GET, '/me'),
@@ -111,13 +122,7 @@ export class ApiStack extends Stack {
         conditions: { StringLike: { 's3:prefix': ['uploads/*'] } },
       }),
     );
-    deleteMe.addToRolePolicy(
-      new PolicyStatement({
-        effect: Effect.ALLOW,
-        actions: ['s3:DeleteObject'],
-        resources: [props.uploadsBucket.arnForObjects('uploads/*')],
-      }),
-    );
+    allowDeleteUploads(deleteMe);
 
     // Anthropic API key (BYOK). Only the test function can decrypt; saving only creates data keys.
     const keyPath = '/settings/api-key';
@@ -168,13 +173,7 @@ export class ApiStack extends Stack {
       'dynamodb:UpdateItem',
     );
     // Deleting a Resume deletes its uploaded file. It knows the exact key, so it needs no listing.
-    deleteResume.addToRolePolicy(
-      new PolicyStatement({
-        effect: Effect.ALLOW,
-        actions: ['s3:DeleteObject'],
-        resources: [props.uploadsBucket.arnForObjects('uploads/*')],
-      }),
-    );
+    allowDeleteUploads(deleteResume);
     props.table.grant(
       route('DuplicateResume', 'resumes.ts', HttpMethod.POST, '/resumes/{id}/duplicate'),
       'dynamodb:GetItem',

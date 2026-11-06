@@ -125,7 +125,7 @@ Text read from a file can be wrong, and it is what the AI reads, so an uploaded 
 
 ## Infrastructure
 
-Six functions, one per route, sharing one handler (`apps/api/src/handlers/resumes.ts`) and each holding only the DynamoDB actions its code path needs:
+One function per route, sharing one handler (`apps/api/src/handlers/resumes.ts`) and each holding only the DynamoDB actions its code path needs:
 
 | Function | Actions |
 |---|---|

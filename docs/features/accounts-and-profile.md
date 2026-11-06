@@ -14,7 +14,7 @@ Phase 1. Anyone can create an account, verify their email, sign in, rename thems
 | Sign out | Account menu | Clears the session and the cached profile. |
 | Rename | `/settings` | Updates the name used to sign cover letters. |
 | Choose a model | `/settings` | Pick from the allow-list. See [Model selection](#model-selection). |
-| Delete account | `/settings` | Type `DELETE` to confirm. Removes the profile and the login, then signs out. |
+| Delete account | `/settings` | Type `DELETE` to confirm. Removes the uploaded files, the profile and all data, and the login, then signs out. |
 
 All app routes require a session (`RequireAuth`). Login and sign-up redirect signed-in users into the app (`PublicOnly`).
 
@@ -41,7 +41,7 @@ All routes need `Authorization: Bearer <ID token>` (not the access token: the pr
 |---|---|---|---|
 | GET | `/me` | none | 200 profile (created if missing) |
 | PUT | `/me` | `{ "name"?, "modelId"?, "onboardingStep"? }`. At least one. Name 1 to 100 chars; `modelId` must be on the allow-list; `onboardingStep` follows the [onboarding rules](onboarding.md). No other fields | 200 profile, 400 invalid, 404 no profile, 409 onboarding rule |
-| DELETE | `/me` | none | 204. Deletes all items under the user's partition, then the Cognito user |
+| DELETE | `/me` | none | 204. Deletes the user's uploaded files, then all items under the user's partition, then the Cognito user. Safe to retry |
 
 Profile shape (`packages/shared/src/profile.ts`): `name`, `email`, `onboardingStep` (`welcome | api-key | resume | done`), `onboardingCompletedAt` (ISO or null), `modelId` (always resolved), `createdAt`.
 
@@ -92,7 +92,7 @@ These are baked into the bundle at build time, so rebuild after changing them.
 - The API ignores identity in request bodies; `PUT /me` uses a strict schema that rejects unknown fields.
 - Logs contain IDs only: no emails, names or resume or job text.
 - Cognito's built-in email is limited to about 50 messages a day. Public sign-up at scale needs SES (paid, not yet added).
-- Deleting an account removes DynamoDB items and the Cognito user. S3 objects are added to this flow in Phase 2 when uploads exist.
+- Deleting an account removes the uploaded files (S3), the DynamoDB items and the Cognito user, in that order. The files come first so a failure never leaves personal data behind with no account to retry from; the login goes last so the user can always sign in again to retry. `DeleteMe` may list the bucket only under `uploads/` and delete only under `uploads/`, with no wildcard actions.
 
 ## Tests
 

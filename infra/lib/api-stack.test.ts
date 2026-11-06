@@ -218,3 +218,57 @@ describe('ApiStack upload route', () => {
     });
   });
 });
+
+describe('ApiStack file deletion permissions', () => {
+  const policies = () => Object.entries(template.findResources('AWS::IAM::Policy'));
+  const statementsOf = (re: RegExp) =>
+    policies()
+      .filter(([id]) => re.test(id))
+      .flatMap(
+        ([, p]) =>
+          p.Properties.PolicyDocument.Statement as {
+            Action: string | string[];
+            Resource: unknown;
+            Condition?: unknown;
+          }[],
+      );
+  const withAction = (action: string) =>
+    policies().filter(([, p]) =>
+      JSON.stringify(p.Properties.PolicyDocument).includes(`"${action}"`),
+    );
+
+  it('only deleting a Resume or an account can delete files', () => {
+    const names = withAction('s3:DeleteObject')
+      .map(([id]) => id)
+      .sort();
+    expect(names).toHaveLength(2);
+    expect(names[0]).toMatch(/DeleteMe/);
+    expect(names[1]).toMatch(/DeleteResume/);
+  });
+
+  it('deleting is limited to files under the uploads prefix', () => {
+    for (const re of [/DeleteResume/, /DeleteMe/]) {
+      const del = statementsOf(re).find((s) =>
+        JSON.stringify(s.Action).includes('s3:DeleteObject'),
+      )!;
+      expect(JSON.stringify(del.Resource)).toContain('/uploads/*');
+      expect(([] as string[]).concat(del.Action)).toEqual(['s3:DeleteObject']);
+    }
+  });
+
+  it('only deleting an account can list files, and only under the uploads prefix', () => {
+    const lists = withAction('s3:ListBucket');
+    expect(lists).toHaveLength(1);
+    expect(lists[0]![0]).toMatch(/DeleteMe/);
+    const list = statementsOf(/DeleteMe/).find((s) =>
+      JSON.stringify(s.Action).includes('s3:ListBucket'),
+    )!;
+    expect(list.Condition).toEqual({ StringLike: { 's3:prefix': ['uploads/*'] } });
+    expect(JSON.stringify(list.Resource)).not.toContain('/uploads/*');
+  });
+
+  it('deleting a Resume cannot list, read or write files', () => {
+    const actions = statementsOf(/DeleteResume/).flatMap((s) => ([] as string[]).concat(s.Action));
+    expect(actions.filter((a) => a.startsWith('s3:'))).toEqual(['s3:DeleteObject']);
+  });
+});

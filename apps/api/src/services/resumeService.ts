@@ -232,6 +232,11 @@ export function createResumeService(deps: {
     async delete(userId: string, id: string): Promise<boolean> {
       const target = await deps.repo.get(userId, id);
       if (!target) return false;
+      // The file goes first. If that fails the Resume is still there to try again; the other way round could leave
+      // a file that nothing points to. Deleting a file that is not there is fine (the upload may never have happened).
+      if (target.original) {
+        await deps.store.delete(originalKey(userId, id, target.original.filename));
+      }
       await deps.repo.delete(userId, id);
       if (target.isDefault) {
         const [next] = (await deps.repo.list(userId)).sort(newestFirst);

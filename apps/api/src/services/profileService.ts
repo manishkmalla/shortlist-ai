@@ -1,4 +1,5 @@
 import type { ModelId, Profile, StoredProfile, UpdateProfileRequest } from '@shortlist-ai/shared';
+import type { UserFiles } from '../lib/userFiles';
 import type { ProfilePatch, ProfileRepo } from '../repo/profileRepo';
 
 /** Removes the Cognito account. Implemented in lib/identity.ts. */
@@ -28,6 +29,8 @@ const ONBOARDING_VERSION = 1;
 export function createProfileService(deps: {
   repo: ProfileRepo;
   identity: IdentityAdmin;
+  /** The user's uploaded files, removed when the account is deleted. */
+  files: UserFiles;
   /** True when the user has an Anthropic key that passed its last check. */
   hasVerifiedKey: (userId: string) => Promise<boolean>;
   /** From config (DEFAULT_MODEL_ID). Used until the user picks a model. */
@@ -115,7 +118,13 @@ export function createProfileService(deps: {
     },
 
     /** Data first, then the login. If the second step fails the user can retry. */
+    /**
+     * Files first, then the data, then the login. Every step is safe to repeat, and a failure stops the rest, so a
+     * failed attempt leaves the account usable and a retry finishes the job. Deleting the login last means the user
+     * can always sign in again to retry.
+     */
     async deleteAccount(userId: string): Promise<void> {
+      await deps.files.deleteAllFor(userId);
       await deps.repo.deleteAll(userId);
       await deps.identity.deleteUser(userId);
     },

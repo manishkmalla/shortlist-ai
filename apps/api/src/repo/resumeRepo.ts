@@ -6,7 +6,12 @@ import {
   TransactWriteCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { resumeFailureSchema, resumeSourceSchema, resumeStatusSchema } from '@shortlist-ai/shared';
+import {
+  resumeFailureSchema,
+  resumeSourceSchema,
+  resumeStatusSchema,
+  type ResumeFailure,
+} from '@shortlist-ai/shared';
 import { z } from 'zod';
 import type { Db } from './db';
 import { userPk } from './keys';
@@ -43,8 +48,11 @@ export const storedResumeSchema = z.object({
 export type StoredResume = z.infer<typeof storedResumeSchema>;
 
 export type ResumePatch = Partial<
-  Pick<StoredResume, 'label' | 'notes' | 'text' | 'reviewedAt' | 'updatedAt' | 'status' | 'failure'>
->;
+  Pick<StoredResume, 'label' | 'notes' | 'text' | 'reviewedAt' | 'updatedAt' | 'status'>
+> & {
+  /** A failure to record, or `null` to remove the one that is stored. */
+  failure?: ResumeFailure | null;
+};
 
 export interface ResumeRepo {
   list(userId: string): Promise<StoredResume[]>;
@@ -106,19 +114,25 @@ export function createResumeRepo(db: Db, tableName: string): ResumeRepo {
     },
 
     async update(userId, id, patch, options) {
-      const fields = Object.entries(patch).filter(([, v]) => v !== undefined);
+      const fields = Object.entries(patch).filter(
+        ([k, v]) => v !== undefined && !(k === 'failure' && v === null),
+      );
+      const removeFailure = patch.failure === null;
       const onlyIfStatus = options?.onlyIfStatus;
       try {
         const out = await db.send(
           new UpdateCommand({
             TableName: tableName,
             Key: key(userId, id),
-            UpdateExpression: `SET ${fields.map(([k]) => `#${k} = :${k}`).join(', ')}`,
+            UpdateExpression:
+              `SET ${fields.map(([k]) => `#${k} = :${k}`).join(', ')}` +
+              (removeFailure ? ' REMOVE #failure' : ''),
             ConditionExpression: onlyIfStatus
               ? 'attribute_exists(pk) AND #expectedStatus = :expectedStatus'
               : 'attribute_exists(pk)',
             ExpressionAttributeNames: {
               ...Object.fromEntries(fields.map(([k]) => [`#${k}`, k])),
+              ...(removeFailure ? { '#failure': 'failure' } : {}),
               ...(onlyIfStatus ? { '#expectedStatus': 'status' } : {}),
             },
             ExpressionAttributeValues: {

@@ -61,6 +61,10 @@ export function createFakeDb() {
         )) {
           updated[names[ref!]!] = values[value!];
         }
+        // REMOVE #a, #b deletes those attributes.
+        const remove = /REMOVE\s+([#\w\s,]+)$/.exec(command.input.UpdateExpression ?? '');
+        for (const ref of remove?.[1]?.split(',').map((r) => r.trim()) ?? [])
+          delete updated[names[ref]!];
         items.set(id(k.pk, k.sk), updated);
         return { Attributes: updated };
       }

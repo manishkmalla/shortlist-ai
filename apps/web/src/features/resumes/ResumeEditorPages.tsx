@@ -118,21 +118,23 @@ export function EditResumePage() {
     );
   }
 
-  if (resume.data.status !== 'ready') {
+  // Still being read: nothing to edit yet. The page fills in by itself when reading finishes.
+  if (resume.data.status === 'processing') {
     return (
       <div className="space-y-6">
         <Back />
         <h1 className="text-2xl font-semibold">Edit resume</h1>
         <Card>
           <p role="status" className="text-sm text-slate-600 dark:text-slate-400">
-            {resume.data.status === 'processing'
-              ? 'This file is still being read. This page updates when it is ready.'
-              : (resume.data.failureReason?.message ?? 'We could not read this file.')}
+            This file is still being read. This page updates when it is ready.
           </p>
         </Card>
       </div>
     );
   }
+
+  // Could not be read: the user fixes it by pasting the text. The file they uploaded is kept.
+  const fixing = resume.data.status === 'failed';
 
   const reviewing = needsReview(resume.data);
 
@@ -159,7 +161,7 @@ export function EditResumePage() {
           ...(changed.text ? { text: values.text } : {}),
         },
       });
-      toast({ title: 'Resume saved', tone: 'good' });
+      toast({ title: fixing ? 'Resume fixed' : 'Resume saved', tone: 'good' });
       return true;
     } catch (e) {
       setError(errorMessage(e));
@@ -171,6 +173,17 @@ export function EditResumePage() {
     <div className="space-y-6">
       <Back />
       <h1 className="text-2xl font-semibold">Edit resume</h1>
+      {fixing && (
+        <Card className="space-y-2 border-red-300 bg-red-50 dark:border-red-900 dark:bg-red-950">
+          <p className="text-sm font-medium">We could not read this file.</p>
+          <p className="text-sm text-slate-700 dark:text-slate-300">
+            {resume.data.failureReason?.message ?? 'The file could not be turned into text.'}
+          </p>
+          <p className="text-sm text-slate-700 dark:text-slate-300">
+            Paste your resume text below to use this resume. Your original file is kept.
+          </p>
+        </Card>
+      )}
       {reviewing && (
         <Card className="space-y-3 border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
           <p className="text-sm font-medium">

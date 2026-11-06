@@ -57,7 +57,7 @@ How it behaves:
 The upload path itself arrives ticket by ticket (see the upload spec). The model is ready for it:
 
 - A stored Resume can carry its Original's sanitised file name, size and type, and a failure reason. Storage keys are never stored: they are built from the user and Resume ids.
-- **Marking a Resume reviewed, or editing its text** (which counts as reviewing it), is refused (`409 not_ready`) unless its status is `ready`. The check happens before anything else is applied, so a refused request changes nothing. Renaming and notes are always allowed. (The Fix path for failed uploads, a later ticket, will add the one deliberate exception.)
+- **Marking a Resume reviewed, or editing its text** (which counts as reviewing it), is refused (`409 not_ready`) unless its status is `ready`. The check happens before anything else is applied, so a refused request changes nothing. Renaming and notes are always allowed. The one deliberate exception is **Fix**: pasting text into a *failed* upload (see below).
 - **Duplicating** is refused (`409 not_ready`) unless the Resume is `ready`. A copy keeps the text and the reviewed state but not the Original or any failure, because the file belongs to the source.
 - **File names** from the user's computer are never used as they are. One rule turns them into safe names: only the last path segment is used, control and non-ASCII characters are removed, the rest becomes letters, digits, hyphens and underscores, an allowed extension (`pdf`, `docx`, `txt`) is kept in lower case, the length is capped at 100, and an empty result is `resume`. A name like `cv.pdf.exe` becomes `cv-pdf-exe`, so a disguised extension never survives as a dot.
 - **Tests** can use an in-memory object store (an interface with the same shape as the real bucket). It records what was asked of the signer, so tests can check the signed size, type, key and expiry.
@@ -110,13 +110,22 @@ Text read from a file can be wrong, and it is what the AI reads, so an uploaded 
 - **The review page** (`/resumes/{id}`) shows the extracted text in the editor, with the note "Check this against your original. This is what the AI reads." and a **Confirm text is correct** button.
 - **Two ways to finish.** The **Confirm text is correct** button marks the Resume reviewed without sending any text (`PUT { reviewed: true }`), and shows "Resume marked as reviewed". Editing the text and saving also counts, as does any text change. Renaming alone does not. After either, the badge disappears and the page returns to the list.
 - **Unsaved edits.** Confirm is disabled while the editor has unsaved changes ("Save your changes first."), so the user can never confirm text they are not looking at.
-- **Not ready.** For a file still being read, the page says so and fills in by itself when reading finishes (it checks every two seconds). For a file that could not be read, it shows the reason. Neither offers Confirm, and the server refuses it anyway (`409 not_ready`). Fixing a failed upload by pasting text is a later ticket.
+- **Not ready.** For a file still being read, the page says so and fills in by itself when reading finishes (it checks every two seconds). Neither offers Confirm, and the server refuses it anyway (`409 not_ready`). A file that could not be read opens in fix mode (next section).
 - **Using a Resume.** The rule that an Analysis refuses an unreviewed Resume belongs to the Analysis stage (Phase 3). This page only makes sure the flag is accurate.
+
+## Fixing a failed upload
+
+A file can fail to read: scanned or empty, over the length limit, a PDF or zip renamed to `.txt`, a text file in another encoding, or an upload that never finished. The user is never stuck:
+
+- **In My Resumes** a failed Resume shows its reason and a **Fix** link, next to the Failed badge.
+- **Fix mode.** The link opens the editor with the reason, the line "Paste your resume text below to use this resume. Your original file is kept.", and an empty text box. The label and notes can be edited too. Saving the pasted text (`PUT { text }`) turns the Resume into a normal one: status `ready`, reviewed (the user typed it, so no further review is needed), the failure cleared. The Original stays, and so does its download once that exists. The usual length rules apply (20 to 60,000 characters), and the guard against losing unsaved edits applies.
+- **Only failed uploads can be fixed this way.** Confirming (`reviewed: true`) without text on a failed Resume is still refused, and so is editing the text of one that is still being read. If the Resume changed while the user was saving (for example the file was read in that moment), the save is refused with a clear message and nothing is overwritten.
+- **An upload that never finished.** An upload still processing 15 minutes after it was created is shown as failed with the reason "The upload did not finish". This is worked out whenever the Resume is read, so no background job runs and the stored Resume is not changed. Such a Resume can be fixed or deleted like any failed one, and still counts towards the limit of 10. If the file does arrive late and the Resume has not been fixed, reading it completes the Resume as usual; once fixed, a late file is ignored.
 
 ## Rules
 
 - **Limit:** 10 resumes per user. Create and duplicate both check it. The check is not atomic, so two simultaneous requests could briefly exceed it. That is harmless and bounded by the API throttle.
-- **Default:** the first resume becomes the default. Choosing another clears the old default in one transaction, so there is never more than one. Deleting the default promotes the most recently updated remaining resume. `isDefault` can only be set to `true`.
+- **Default:** the first resume becomes the default. Choosing another clears the old default in one transaction, so there is never more than one. Deleting the default promotes the most recently updated remaining resume. `isDefault` can only be set to `true`. If the default is **not ready** (failed, or still processing), the first Resume that becomes ready takes over: one that is pasted, copied, fixed, or finishes being read. A default that is ready is never changed by this, and starting an upload does not change it, because that Resume is not ready yet.
 - **Ownership:** the user ID comes only from the token. Ids in paths must be UUIDs, and anything else is a 404.
 - **Body size:** requests over 250 KB are rejected.
 - **Privacy:** logs contain error class names and IDs only, never resume text, labels or notes.

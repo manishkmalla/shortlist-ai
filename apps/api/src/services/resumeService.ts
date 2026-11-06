@@ -3,6 +3,7 @@ import {
   MAX_RESUMES,
   MAX_UPLOAD_BYTES,
   ORIGINAL_CONTENT_TYPES,
+  UPLOAD_TIMEOUT_MINUTES,
   UPLOADABLE_EXTENSIONS,
   type CreateResumeRequest,
   type OriginalExtension,
@@ -16,6 +17,7 @@ import { sanitiseFilename } from '../lib/filename';
 import { originalKey } from '../lib/objectKeys';
 import type { ObjectStore } from '../lib/objectStore';
 import type { ResumePatch, ResumeRepo, StoredResume } from '../repo/resumeRepo';
+import { claimDefaultIfNotReady } from './defaultResume';
 
 /** How long the browser has to start sending the file. */
 const UPLOAD_EXPIRY_SECONDS = 300;
@@ -58,6 +60,25 @@ const toSummary = (r: StoredResume): ResumeSummary => ({
 
 const toResume = (r: StoredResume): Resume => ({ ...toSummary(r), text: r.text });
 
+/**
+ * A Resume still processing after UPLOAD_TIMEOUT_MINUTES is treated as failed, because the file never arrived or was
+ * never read. This is worked out whenever the Resume is read, so nothing has to run in the background, and the stored
+ * Resume is not changed. If the file does arrive later, reading it completes the Resume as usual.
+ */
+const withTimeout = (r: StoredResume, nowMs: number): StoredResume => {
+  const age = nowMs - Date.parse(r.createdAt);
+  if (r.status !== 'processing' || age < UPLOAD_TIMEOUT_MINUTES * 60_000) return r;
+  return {
+    ...r,
+    status: 'failed',
+    failure: {
+      code: 'upload_incomplete',
+      message:
+        'The upload did not finish. Paste your resume text instead, or delete this resume and upload the file again.',
+    },
+  };
+};
+
 const newestFirst = (a: StoredResume, b: StoredResume) => b.updatedAt.localeCompare(a.updatedAt);
 
 /** Only a Resume whose text the app has actually read can be reviewed, edited as text, or copied. */
@@ -89,6 +110,9 @@ export function createResumeService(deps: {
   now?: () => Date;
 }) {
   const now = () => (deps.now ?? (() => new Date()))().toISOString();
+  const nowMs = () => (deps.now ?? (() => new Date()))().getTime();
+  /** A stored Resume as the user should see it: an upload that never finished counts as failed. */
+  const view = (r: StoredResume) => withTimeout(r, nowMs());
 
   /** Rejects when the library is full. Returns the current list so callers can reuse it. */
   const ensureRoom = async (userId: string) => {
@@ -99,12 +123,12 @@ export function createResumeService(deps: {
 
   return {
     async list(userId: string): Promise<ResumeSummary[]> {
-      return (await deps.repo.list(userId)).sort(newestFirst).map(toSummary);
+      return (await deps.repo.list(userId)).sort(newestFirst).map((r) => toSummary(view(r)));
     },
 
     async get(userId: string, id: string): Promise<Resume | null> {
       const found = await deps.repo.get(userId, id);
-      return found ? toResume(found) : null;
+      return found ? toResume(view(found)) : null;
     },
 
     /** Pasted text counts as reviewed: the user typed or pasted it themselves. The first resume is the default. */
@@ -124,7 +148,9 @@ export function createResumeService(deps: {
         updatedAt: stamp,
       };
       await deps.repo.create(userId, resume);
-      return toResume(resume);
+      const claimed =
+        existing.length > 0 && (await claimDefaultIfNotReady(deps.repo, userId, resume.id, stamp));
+      return toResume({ ...resume, isDefault: resume.isDefault || claimed });
     },
 
     /**
@@ -180,7 +206,7 @@ export function createResumeService(deps: {
       await ensureRoom(userId);
       const source = await deps.repo.get(userId, id);
       if (!source) throw new ResumeError('not_found', 'Resume not found.');
-      assertReady(source, 'duplicated');
+      assertReady(view(source), 'duplicated');
       const stamp = now();
       const copy: StoredResume = {
         ...source,
@@ -195,16 +221,24 @@ export function createResumeService(deps: {
       delete copy.original;
       delete copy.failure;
       await deps.repo.create(userId, copy);
-      return toResume(copy);
+      const claimed = await claimDefaultIfNotReady(deps.repo, userId, copy.id, stamp);
+      return toResume({ ...copy, isDefault: claimed });
     },
 
-    /** Editing the text, or confirming it, marks the resume as reviewed. */
+    /**
+     * Editing the text, or confirming it, marks the resume as reviewed. Both need a ready Resume, with one deliberate
+     * exception: pasting text into a failed upload fixes it, turning it into a ready, reviewed Resume.
+     */
     async update(userId: string, id: string, input: UpdateResumeRequest): Promise<Resume | null> {
-      // Editing the text counts as reviewing it, so both need a ready Resume. Checked first, so a refusal changes nothing.
+      // Checked first, so a refusal changes nothing.
+      let fixingFrom: StoredResume['status'] | null = null;
       if (input.reviewed || input.text !== undefined) {
-        const current = await deps.repo.get(userId, id);
-        if (!current) return null;
-        assertReady(current, 'marked as reviewed or have its text edited');
+        const stored = await deps.repo.get(userId, id);
+        if (!stored) return null;
+        // `stored.status` is what the write must still find; the decision uses what the user sees.
+        if (input.text !== undefined && view(stored).status === 'failed')
+          fixingFrom = stored.status;
+        else assertReady(view(stored), 'marked as reviewed or have its text edited');
       }
       const stamp = now();
       const patch: ResumePatch = {
@@ -214,9 +248,32 @@ export function createResumeService(deps: {
         updatedAt: stamp,
       };
       if (input.text !== undefined || input.reviewed) patch.reviewedAt = stamp;
+      if (fixingFrom) {
+        // The user typed this text themselves, so it counts as reviewed, and the old failure no longer applies.
+        patch.status = 'ready';
+        patch.failure = null;
+      }
 
-      let updated = await deps.repo.update(userId, id, patch);
-      if (!updated) return null;
+      let updated = await deps.repo.update(
+        userId,
+        id,
+        patch,
+        fixingFrom ? { onlyIfStatus: fixingFrom } : undefined,
+      );
+      if (!updated) {
+        if (fixingFrom) {
+          throw new ResumeError(
+            'not_ready',
+            'This resume changed while you were saving. Reload the page and try again.',
+          );
+        }
+        return null;
+      }
+
+      // A fixed Resume is ready now, so it takes over if the default is not ready.
+      if (fixingFrom && (await claimDefaultIfNotReady(deps.repo, userId, id, stamp))) {
+        updated = (await deps.repo.get(userId, id)) ?? updated;
+      }
 
       if (input.isDefault && !updated.isDefault) {
         const others = (await deps.repo.list(userId))

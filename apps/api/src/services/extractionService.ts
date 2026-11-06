@@ -8,6 +8,7 @@ import { parseOriginalKey } from '../lib/objectKeys';
 import type { ObjectStore } from '../lib/objectStore';
 import { readTextFile } from '../lib/textFile';
 import type { ResumeRepo } from '../repo/resumeRepo';
+import { claimDefaultIfNotReady } from './defaultResume';
 
 export type ExtractionOutcome = 'ready' | 'failed' | 'ignored' | 'orphan_removed';
 
@@ -93,12 +94,15 @@ export function createExtractionService(deps: {
         );
       }
 
+      const stamp = now();
       const done = await deps.repo.update(
         userId,
         resumeId,
-        { text: read.text, status: 'ready', updatedAt: now() },
+        { text: read.text, status: 'ready', updatedAt: stamp },
         { onlyIfStatus: 'processing' },
       );
+      // Now that this file is ready, it takes over if the user's default is not ready.
+      if (done) await claimDefaultIfNotReady(deps.repo, userId, resumeId, stamp);
       return { outcome: done ? 'ready' : 'ignored', userId, resumeId, size: info.size };
     },
   };
